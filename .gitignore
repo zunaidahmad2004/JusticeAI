@@ -1,0 +1,44 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Build outputs
+dist/
+build/
+**/dist/
+**/build/
+
+# Environment files (NEVER commit secrets)
+.env
+.env.local
+.env.*.local
+server/.env
+**/.env
+
+# Logs
+*.log
+logs/
+**/logs/
+
+# Uploads (local files — use cloud storage in production)
+uploads/*
+!uploads/.gitkeep
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor
+*.local
+.vscode/settings.json
+.idea/
+
+# TypeScript
+*.tsbuildinfo
+
+# Coverage
+coverage/
+
+# Gemini credentials (NEVER commit)
+*credentials.json
+*service-account*.json

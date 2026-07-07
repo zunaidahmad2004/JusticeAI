@@ -1,0 +1,143 @@
+import dotenv from 'dotenv';
+dotenv.config();
+
+import express from 'express';
+import { createServer } from 'http';
+import { Server as SocketServer } from 'socket.io';
+import cors from 'cors';
+import helmet from 'helmet';
+import compression from 'compression';
+import morgan from 'morgan';
+import { rateLimit } from 'express-rate-limit';
+import path from 'path';
+
+import { connectDB } from './db/mongoose';
+import { logger } from './utils/logger';
+import { errorHandler } from './middleware/errorHandler';
+import { notFound } from './middleware/notFound';
+import { getAIStatus } from './services/aiService';
+import { initSocketService } from './services/socketService';
+
+// Routes
+import authRoutes from './routes/auth';
+import caseRoutes from './routes/cases';
+import evidenceRoutes from './routes/evidence';
+import witnessRoutes from './routes/witnesses';
+import victimRoutes from './routes/victims';
+import suspectRoutes from './routes/suspects';
+import documentRoutes from './routes/documents';
+import legalRoutes from './routes/legal';
+import aiRoutes from './routes/ai';
+import dashboardRoutes from './routes/dashboard';
+import notificationRoutes from './routes/notifications';
+import adminRoutes from './routes/admin';
+import analyticsRoutes from './routes/analytics';
+import caseFilingRoutes    from './routes/caseFiling';
+import courtHearingRoutes  from './routes/courtHearings';
+import reportsRoutes       from './routes/reports';
+
+const app  = express();
+const httpServer = createServer(app);
+const io   = new SocketServer(httpServer, {
+  cors: {
+    origin: process.env.CLIENT_URL || 'http://localhost:5173',
+    methods: ['GET', 'POST'],
+    credentials: true,
+  },
+});
+initSocketService(io);
+const PORT = process.env.PORT || 5000;
+
+// ─── Security middleware ──────────────────────────────────────────────────────
+app.use(helmet());
+app.use(cors({
+  origin: process.env.CLIENT_URL || 'http://localhost:5173',
+  credentials: true,
+}));
+
+// ─── Rate limiting ────────────────────────────────────────────────────────────
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again later.' },
+});
+app.use('/api/', limiter);
+
+// Stricter limit for AI routes (Gemini quota protection)
+const aiLimiter = rateLimit({
+  windowMs: 60 * 1000,   // 1 minute
+  max: 20,
+  message: { error: 'AI request limit reached. Please wait a moment before trying again.' },
+});
+app.use('/api/ai/', aiLimiter);
+app.use('/api/case-filing/', aiLimiter);
+
+// Increase timeout for AI routes to 3 minutes
+app.use('/api/ai/', (req, res, next) => { res.setTimeout(180000); next(); });
+app.use('/api/case-filing/', (req, res, next) => { res.setTimeout(180000); next(); });
+
+// ─── Body parsing ─────────────────────────────────────────────────────────────
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(compression());
+
+// ─── Logging ──────────────────────────────────────────────────────────────────
+if (process.env.NODE_ENV !== 'test') {
+  app.use(morgan('combined', {
+    stream: { write: (message) => logger.info(message.trim()) },
+  }));
+}
+
+// ─── Static file serving ──────────────────────────────────────────────────────
+const uploadDir = process.env.UPLOAD_DIR || './uploads';
+app.use('/uploads', express.static(path.resolve(uploadDir)));
+
+// ─── API Routes ───────────────────────────────────────────────────────────────
+app.use('/api/auth', authRoutes);
+app.use('/api/cases', caseRoutes);
+app.use('/api/evidence', evidenceRoutes);
+app.use('/api/witnesses', witnessRoutes);
+app.use('/api/victims', victimRoutes);
+app.use('/api/suspects', suspectRoutes);
+app.use('/api/documents', documentRoutes);
+app.use('/api/legal', legalRoutes);
+app.use('/api/ai', aiRoutes);
+app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/analytics', analyticsRoutes);
+app.use('/api/case-filing',    caseFilingRoutes);
+app.use('/api/court-hearings', courtHearingRoutes);
+app.use('/api/reports',        reportsRoutes);
+
+// ─── Health check ─────────────────────────────────────────────────────────────
+app.get('/api/health', (_req, res) => {
+  res.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    database: 'mongodb',
+    ai: getAIStatus(),
+  });
+});
+
+// ─── Error handling ───────────────────────────────────────────────────────────
+app.use(notFound);
+app.use(errorHandler);
+
+// ─── Boot ─────────────────────────────────────────────────────────────────────
+const start = async () => {
+  await connectDB();
+  httpServer.listen(PORT, () => {
+    logger.info(`JusticeAI server running on port ${PORT} [${process.env.NODE_ENV || 'development'}]`);
+    logger.info(`AI backend: ${getAIStatus()}`);
+  });
+};
+
+start().catch((err) => {
+  logger.error('Failed to start server', err);
+  process.exit(1);
+});
+
+export default app;
