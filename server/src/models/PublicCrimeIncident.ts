@@ -49,7 +49,7 @@ const PublicCrimeIncidentSchema = new Schema<IPublicCrimeIncident>({
 }, { timestamps: true });
 
 // TTL — auto-delete incidents older than 45 days
-PublicCrimeIncidentSchema.index({ published_at: 1 }, { expireAfterSeconds: 45 * 24 * 3600 });
+PublicCrimeIncidentSchema.index({ published_at: -1 });
 PublicCrimeIncidentSchema.index({ latitude: 1, longitude: 1 });
 PublicCrimeIncidentSchema.index({ crime_type: 1, published_at: -1 });
 

@@ -2,21 +2,35 @@ import mongoose from 'mongoose';
 import { logger } from '../utils/logger';
 
 export const connectDB = async (): Promise<void> => {
-  const uri = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/justice_ai';
+  const uri = process.env.MONGODB_URI;
 
-  try {
-    await mongoose.connect(uri, {
-      serverSelectionTimeoutMS: 5000,
-    });
-    logger.info(`MongoDB connected: ${mongoose.connection.host}`);
-  } catch (err) {
-    logger.error('MongoDB connection failed', err);
-    process.exit(1);
+  if (!uri) {
+    logger.error('MONGODB_URI environment variable is not set. Please add it in Render → Environment.');
+    // Don't exit — let server start so health check passes
+    return;
   }
+
+  const connect = async () => {
+    try {
+      await mongoose.connect(uri, {
+        serverSelectionTimeoutMS: 10000,
+        socketTimeoutMS: 45000,
+      });
+      logger.info(`MongoDB connected: ${mongoose.connection.host}`);
+    } catch (err: unknown) {
+      logger.error('MongoDB connection failed', { err: String(err).substring(0, 200) });
+      logger.info('Retrying MongoDB connection in 5 seconds...');
+      setTimeout(connect, 5000); // Retry instead of crashing
+    }
+  };
+
+  await connect();
 };
 
 mongoose.connection.on('disconnected', () => {
   logger.warn('MongoDB disconnected');
 });
 
-export default mongoose;
+mongoose.connection.on('error', (err) => {
+  logger.error('MongoDB error', { err: String(err).substring(0, 200) });
+});
