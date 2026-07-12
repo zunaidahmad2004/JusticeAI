@@ -667,7 +667,7 @@ function WitnessDetailModal({ witness: w, onClose, onAddStatement, onRefresh }: 
                   { icon: MapPin,    label: 'Address',          value: w.address },
                   { icon: Briefcase, label: 'Occupation',       value: w.occupation },
                   { icon: ChevronRight,label:'Relationship',    value: w.relationship_to_case },
-                  { icon: Clock,     label: 'Added',            value: format(new Date(w.createdAt), 'dd MMM yyyy') },
+                  { icon: Clock,     label: 'Added',            value: w.createdAt ? (() => { try { return format(new Date(w.createdAt), 'dd MMM yyyy'); } catch { return '—'; } })() : '—' },
                 ].map((row) => row.value ? (
                   <div key={row.label} className="flex items-start gap-3">
                     <div className="w-7 h-7 rounded-lg bg-base-elevated flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -701,7 +701,7 @@ function WitnessDetailModal({ witness: w, onClose, onAddStatement, onRefresh }: 
                     <div className="flex items-center gap-2">
                       <span className="w-6 h-6 rounded-full bg-navy-500/20 text-navy-400 text-xs font-bold flex items-center justify-center">{i+1}</span>
                       <span className="text-xs text-slate-400">
-                        {s.statement_date ? format(new Date(s.statement_date), 'dd MMM yyyy HH:mm') : 'Date unknown'}
+                        {s.statement_date ? (() => { try { return format(new Date(s.statement_date), 'dd MMM yyyy HH:mm'); } catch { return 'Unknown date'; } })() : 'Date unknown'}
                         {s.recorded_by && ` · ${s.recorded_by}`}
                         {s.location && ` · ${s.location}`}
                       </span>
@@ -739,7 +739,7 @@ function WitnessDetailModal({ witness: w, onClose, onAddStatement, onRefresh }: 
                         <div className="glass-card p-3">
                           <p className="text-sm text-white">{act.description}</p>
                           <p className="text-xs text-slate-500 mt-1">
-                            {act.performed_by} · {act.createdAt ? formatDistanceToNow(new Date(act.createdAt), { addSuffix: true }) : ''}
+                            {act.performed_by} · {act.createdAt ? (() => { try { return formatDistanceToNow(new Date(act.createdAt), { addSuffix: true }); } catch { return ''; } })() : ''}
                           </p>
                         </div>
                       </div>

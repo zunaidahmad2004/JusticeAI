@@ -94,10 +94,10 @@ export default function TimelinePage() {
                       </div>
                       <div className="text-right flex-shrink-0">
                         <p className="text-sm font-medium text-slate-300">
-                          {format(new Date(event.event_date), 'dd MMM yyyy')}
+                          {event.event_date ? (() => { try { return format(new Date(event.event_date), 'dd MMM yyyy'); } catch { return '—'; } })() : '—'}
                         </p>
                         <p className="text-xs text-slate-500">
-                          {format(new Date(event.event_date), 'HH:mm')}
+                          {event.event_date ? (() => { try { return format(new Date(event.event_date), 'HH:mm'); } catch { return ''; } })() : ''}
                         </p>
                       </div>
                     </div>

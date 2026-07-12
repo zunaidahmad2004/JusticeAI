@@ -175,7 +175,7 @@ export default function CaseDetailPage() {
                 {[
                   { icon: Hash,      label: 'FIR Number',           value: caseData.fir_number || '—' },
                   { icon: FileText,  label: 'Crime Type',           value: caseData.crime_type || '—' },
-                  { icon: Calendar,  label: 'Date of Incident',     value: format(new Date(caseData.date_of_incident), 'dd MMM yyyy') },
+                  { icon: Calendar,  label: 'Date of Incident',     value: caseData.date_of_incident ? (() => { try { return format(new Date(caseData.date_of_incident), 'dd MMM yyyy'); } catch { return '—'; } })() : '—' },
                   { icon: MapPin,    label: 'Location',             value: caseData.location || '—' },
                   { icon: Shield,    label: 'Investigating Officer',value: caseData.io_name || 'Not Assigned' },
                   { icon: Building2, label: 'Police Station',       value: caseData.station || '—' },
@@ -259,8 +259,8 @@ export default function CaseDetailPage() {
                 {[
                   { label: 'Status',       value: <span className={st.badge}>{st.label}</span> },
                   { label: 'Priority',     value: <span className={pri.badge}>{caseData.priority}</span> },
-                  { label: 'Created',      value: format(new Date(caseData.created_at), 'dd MMM yyyy') },
-                  { label: 'Last Updated', value: format(new Date(caseData.updated_at), 'dd MMM yyyy') },
+                  { label: 'Created',      value: caseData.created_at ? (() => { try { return format(new Date(caseData.created_at), 'dd MMM yyyy'); } catch { return '—'; } })() : '—' },
+                  { label: 'Last Updated', value: (caseData.updated_at) ? (() => { try { return format(new Date(caseData.updated_at), 'dd MMM yyyy'); } catch { return '—'; } })() : '—' },
                 ].map((row) => (
                   <div key={row.label} className="flex items-center justify-between py-2 border-b border-base-border/50 last:border-0">
                     <span className="text-xs text-slate-600">{row.label}</span>

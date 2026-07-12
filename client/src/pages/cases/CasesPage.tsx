@@ -17,10 +17,12 @@ interface Case {
   crime_type?: string;
   status: string;
   priority: string;
-  date_of_incident: string;
+  date_of_incident?: string;
   location?: string;
   io_name?: string;
-  updated_at: string;
+  updated_at?: string;
+  updatedAt?: string;
+  createdAt?: string;
 }
 
 const STATUS_CONFIG: Record<string, { label: string; class: string; icon: any }> = {
@@ -250,7 +252,12 @@ export default function CasesPage() {
                       <td>
                         <div className="flex items-center gap-1.5 text-slate-400 text-sm">
                           <Clock className="w-3.5 h-3.5" />
-                          {format(new Date(c.updated_at), 'dd MMM yyyy')}
+                          {(() => {
+                            const raw = c.updatedAt || c.updated_at || c.createdAt;
+                            if (!raw) return '—';
+                            try { return format(new Date(raw), 'dd MMM yyyy'); }
+                            catch { return '—'; }
+                          })()}
                         </div>
                       </td>
                       <td>

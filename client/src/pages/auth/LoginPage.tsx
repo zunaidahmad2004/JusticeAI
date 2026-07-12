@@ -23,9 +23,13 @@ export default function LoginPage() {
 
   const onSubmit = async (data: FormData) => {
     try {
-      await login(data.email, data.password);
-      toast.success('Welcome back!');
-      navigate('/dashboard');
+      const result = await login(data.email, data.password);
+      if (result.requiresTwoFactor) {
+        navigate('/2fa');
+      } else {
+        toast.success('Welcome back!');
+        navigate('/dashboard');
+      }
     } catch {
       // Error handled by API interceptor
     }

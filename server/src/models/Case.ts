@@ -6,14 +6,36 @@ export interface ICase extends Document {
   description?: string;
   status: string;
   crime_type?: string;
+
+  // Incident details
   incident_date?: Date;
-  incident_location?: string;
+  date_of_incident?: Date;         // alias kept for compatibility
+
+  // Location — full structured address
+  incident_location?: string;      // free-text (legacy)
+  location?: string;               // display string
+  address?: string;
+  city?: string;
+  state?: string;
+  pincode?: string;
+
+  // Coordinates — populated by geocoding service
+  latitude?: number;
+  longitude?: number;
+  geocoded_at?: Date;              // when coordinates were last resolved
+
+  // FIR details
   fir_number?: string;
   fir_date?: Date;
+
+  // Assigned personnel
   police_station?: string;
+  station?: string;
+  io_name?: string;                // denormalised for map queries
   assigned_io?: mongoose.Types.ObjectId;
   assigned_sho?: mongoose.Types.ObjectId;
   prosecutor_id?: mongoose.Types.ObjectId;
+
   priority: string;
   tags: string[];
   ai_summary?: string;
@@ -26,33 +48,57 @@ export interface ICase extends Document {
 const CaseSchema = new Schema<ICase>(
   {
     case_number: { type: String, required: true, unique: true },
-    title: { type: String, required: true },
+    title:       { type: String, required: true },
     description: String,
     status: {
       type: String,
-      enum: ['open', 'under_investigation', 'chargesheet_filed', 'closed', 'archived'],
+      enum: ['open','under_investigation','chargesheet_filed','closed','archived'],
       default: 'open',
     },
     crime_type: String,
-    incident_date: Date,
-    incident_location: String,
+
+    // Dates
+    incident_date:    Date,
+    date_of_incident: Date,
+
+    // Location
+    incident_location:String,
+    location:         String,
+    address:          String,
+    city:             String,
+    state:            String,
+    pincode:          String,
+
+    // Coordinates
+    latitude:         { type: Number, index: true },
+    longitude:        { type: Number, index: true },
+    geocoded_at:      Date,
+
+    // FIR
     fir_number: String,
-    fir_date: Date,
+    fir_date:   Date,
+
+    // Personnel
     police_station: String,
-    assigned_io: { type: Schema.Types.ObjectId, ref: 'User' },
-    assigned_sho: { type: Schema.Types.ObjectId, ref: 'User' },
-    prosecutor_id: { type: Schema.Types.ObjectId, ref: 'User' },
-    priority: { type: String, enum: ['low', 'medium', 'high', 'critical'], default: 'medium' },
-    tags: [String],
-    ai_summary: String,
-    ai_extracted_facts: { type: Schema.Types.Mixed },
-    created_by: { type: Schema.Types.ObjectId, ref: 'User' },
+    station:        String,
+    io_name:        String,
+    assigned_io:    { type: Schema.Types.ObjectId, ref: 'User' },
+    assigned_sho:   { type: Schema.Types.ObjectId, ref: 'User' },
+    prosecutor_id:  { type: Schema.Types.ObjectId, ref: 'User' },
+
+    priority: { type: String, enum: ['low','medium','high','critical'], default: 'medium' },
+    tags:     [String],
+    ai_summary:          String,
+    ai_extracted_facts:  { type: Schema.Types.Mixed },
+    created_by:          { type: Schema.Types.ObjectId, ref: 'User' },
   },
   { timestamps: true }
 );
 
-CaseSchema.index({ title: 'text', description: 'text', case_number: 'text' });
+CaseSchema.index({ title: 'text', description: 'text', case_number: 'text', fir_number: 'text' });
 CaseSchema.index({ status: 1 });
+CaseSchema.index({ priority: 1 });
 CaseSchema.index({ assigned_io: 1 });
+CaseSchema.index({ latitude: 1, longitude: 1 });
 
 export default mongoose.model<ICase>('Case', CaseSchema);

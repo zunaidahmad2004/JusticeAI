@@ -5,8 +5,9 @@ import {
   LayoutDashboard, FolderOpen, Microscope,
   Archive, Bot, BarChart3, Bell,
   Settings, ScrollText, ChevronRight,
-  Shield, LogOut, Scale, Database, ShieldAlert,
-  Calendar, FileText, Share2,
+  Shield, LogOut, Scale, ShieldAlert,
+  Calendar, FileText, Share2, Users, Heart,
+  Fingerprint, Clock, BookOpen, ClipboardList,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import clsx from 'clsx';
@@ -22,25 +23,34 @@ interface NavItem {
 const mainNav: NavItem[] = [
   { to: '/dashboard',    icon: LayoutDashboard, label: 'Dashboard'    },
   { to: '/cases',        icon: FolderOpen,      label: 'Cases'        },
-  { to: '/case-filing',  icon: Scale,           label: 'Smart FIR'    },
-  { to: '/fir-analyzer', icon: Microscope,      label: 'FIR Analyzer' },
   { to: '/evidence',     icon: Archive,         label: 'Evidence'     },
-  { to: '/suspects',     icon: Database,        label: 'Criminal DB'  },
+  { to: '/suspects',     icon: Fingerprint,     label: 'Suspects'     },
+  { to: '/witnesses',    icon: Users,           label: 'Witnesses'    },
+  { to: '/victims',      icon: Heart,           label: 'Victims'      },
 ];
 
-const toolsNav: NavItem[] = [
-  { to: '/ai-chat',       icon: Bot,         label: 'AI Assistant',  badge: 'AI', badgeColor: 'text-primary-400 bg-primary-500/10' },
-  { to: '/risk-analysis', icon: ShieldAlert, label: 'Risk Analysis'  },
-  { to: '/court-calendar',icon: Calendar,    label: 'Court Calendar' },
-  { to: '/reports',       icon: FileText,    label: 'Reports'        },
-  { to: '/graph',         icon: Share2,      label: 'Crime Graph'    },
-  { to: '/analytics',     icon: BarChart3,   label: 'Analytics'      },
-  { to: '/notifications', icon: Bell,        label: 'Notifications'  },
+const firNav: NavItem[] = [
+  { to: '/case-filing',  icon: Scale,           label: 'Smart FIR Filing'  },
+  { to: '/fir-analyzer', icon: Microscope,      label: 'FIR Analyzer'      },
+];
+
+const legalNav: NavItem[] = [
+  { to: '/legal',         icon: BookOpen,       label: 'Legal Provisions'  },
+  { to: '/risk-analysis', icon: ShieldAlert,    label: 'Risk Analysis'     },
+  { to: '/graph',         icon: Share2,         label: 'Crime Graph'       },
+  { to: '/court-calendar',icon: Calendar,       label: 'Court Calendar'    },
+];
+
+const aiNav: NavItem[] = [
+  { to: '/ai-chat',  icon: Bot,           label: 'AI Assistant', badge: 'AI', badgeColor: 'text-primary-400 bg-primary-500/10' },
+  { to: '/reports',  icon: ClipboardList, label: 'Reports'      },
+  { to: '/analytics',icon: BarChart3,     label: 'Analytics'    },
 ];
 
 const systemNav: NavItem[] = [
-  { to: '/profile', icon: Settings,   label: 'Settings'   },
-  { to: '/admin',   icon: ScrollText, label: 'Audit Logs' },
+  { to: '/notifications', icon: Bell,        label: 'Notifications' },
+  { to: '/profile',       icon: Settings,    label: 'Settings'      },
+  { to: '/admin',         icon: ScrollText,  label: 'Audit Logs'    },
 ];
 
 export default function Sidebar({ onClose }: { onClose?: () => void }) {
@@ -111,9 +121,9 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
       </div>
 
       {/* ── Nav ────────────────────────────────────────────────────────────── */}
-      <nav className="flex-1 overflow-y-auto scroll-area px-3 py-4 space-y-6">
+      <nav className="flex-1 overflow-y-auto scroll-area px-3 py-3 space-y-5">
 
-        {/* Main */}
+        {/* Investigation */}
         <div>
           <p className="section-label">Investigation</p>
           <div className="space-y-0.5">
@@ -121,11 +131,27 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
           </div>
         </div>
 
-        {/* Tools */}
+        {/* FIR & Filing */}
         <div>
-          <p className="section-label">Tools</p>
+          <p className="section-label">FIR & Filing</p>
           <div className="space-y-0.5">
-            {toolsNav.map((item) => <NavItemComp key={item.to} item={item} />)}
+            {firNav.map((item) => <NavItemComp key={item.to} item={item} />)}
+          </div>
+        </div>
+
+        {/* Legal & Analysis */}
+        <div>
+          <p className="section-label">Legal & Analysis</p>
+          <div className="space-y-0.5">
+            {legalNav.map((item) => <NavItemComp key={item.to} item={item} />)}
+          </div>
+        </div>
+
+        {/* AI & Reports */}
+        <div>
+          <p className="section-label">AI & Reports</p>
+          <div className="space-y-0.5">
+            {aiNav.map((item) => <NavItemComp key={item.to} item={item} />)}
           </div>
         </div>
 

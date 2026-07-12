@@ -165,6 +165,6 @@ const SuspectSchema = new Schema<ISuspect>(
 
 SuspectSchema.index({ full_name: 'text' });
 SuspectSchema.index({ case_id: 1, createdAt: -1 });
-SuspectSchema.index({ phone: 1, sparse: true });
+SuspectSchema.index({ phone: 1 });
 
 export default mongoose.model<ISuspect>('Suspect', SuspectSchema);

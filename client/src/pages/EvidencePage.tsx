@@ -226,7 +226,7 @@ export default function EvidencePage() {
                     {e.collected_at && (
                       <div className="flex items-center gap-2 text-xs text-slate-500">
                         <Clock className="w-3.5 h-3.5 flex-shrink-0" />
-                        {format(new Date(e.collected_at), 'dd MMM yyyy HH:mm')}
+                        {e.collected_at ? (() => { try { return format(new Date(e.collected_at), 'dd MMM yyyy HH:mm'); } catch { return '—'; } })() : '—'}
                       </div>
                     )}
                     {e.location_found && (
@@ -421,7 +421,7 @@ function EvidenceDetailModal({ evidence: e, onClose }: { evidence: Evidence; onC
         <div className="grid sm:grid-cols-2 gap-4">
           {[
             { label: 'Collected By',  value: e.collected_by_name || '—' },
-            { label: 'Collected At',  value: e.collected_at ? format(new Date(e.collected_at), 'dd MMM yyyy HH:mm') : '—' },
+            { label: 'Collected At',  value: e.collected_at ? (() => { try { return format(new Date(e.collected_at), 'dd MMM yyyy HH:mm'); } catch { return '—'; } })() : '—' },
             { label: 'Location Found',value: e.location_found || '—' },
             { label: 'File Size',     value: fmtSize(e.file_size) || '—' },
           ].map((row) => (
@@ -456,7 +456,7 @@ function EvidenceDetailModal({ evidence: e, onClose }: { evidence: Evidence; onC
                   <div>
                     <p className="text-xs text-white font-medium">{entry.action}</p>
                     <p className="text-xs text-slate-500 mt-0.5">
-                      {entry.officer} · {format(new Date(entry.timestamp), 'dd MMM yyyy HH:mm')}
+                      {entry.officer} · {entry.timestamp ? (() => { try { return format(new Date(entry.timestamp), 'dd MMM yyyy HH:mm'); } catch { return '—'; } })() : '—'}
                     </p>
                   </div>
                 </div>

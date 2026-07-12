@@ -9,12 +9,109 @@ import Suspect from '../models/Suspect';
 import CaseLegalProvision from '../models/CaseLegalProvision';
 import LegalProvision from '../models/LegalProvision';
 import Checklist from '../models/Checklist';
+import { geocodeAddress, sleep } from '../services/geocodeService';
+import { logger } from '../utils/logger';
 import CaseDocument from '../models/CaseDocument';
 import TimelineEvent from '../models/TimelineEvent';
 import { authenticate, AuthRequest } from '../middleware/auth';
 
 const router = Router();
 router.use(authenticate);
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   GET /api/cases/map — MUST be before /:id to avoid route collision
+   ═══════════════════════════════════════════════════════════════════════════ */
+router.get('/map', async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { priority, status, crime_type, fir_number } = req.query as Record<string, string>;
+    const filter: Record<string, unknown> = {
+      latitude:  { $exists: true, $ne: null },
+      longitude: { $exists: true, $ne: null },
+    };
+    if (priority)   filter.priority   = priority;
+    if (status)     filter.status     = status;
+    if (crime_type) filter.crime_type = { $regex: crime_type, $options: 'i' };
+    if (fir_number) filter.fir_number = { $regex: fir_number, $options: 'i' };
+
+    const cases = await Case.find(filter)
+      .select('case_number fir_number title crime_type status priority latitude longitude address city state location incident_location io_name incident_date date_of_incident createdAt')
+      .populate('assigned_io', 'full_name')
+      .lean();
+
+    const markers = cases.map((c) => ({
+      id:               String(c._id),
+      case_number:      c.case_number,
+      fir_number:       c.fir_number  || '',
+      title:            c.title,
+      crime_type:       c.crime_type  || 'Unknown',
+      status:           c.status,
+      priority:         c.priority,
+      latitude:         c.latitude,
+      longitude:        c.longitude,
+      address:          c.address || c.location || c.incident_location || '',
+      city:             c.city    || '',
+      state:            c.state   || '',
+      io_name:          c.io_name || (c.assigned_io as any)?.full_name || 'Unassigned',
+      date_of_incident: c.incident_date || c.date_of_incident || c.createdAt,
+    }));
+
+    const [total, open, highPri, withCoords] = await Promise.all([
+      Case.countDocuments(),
+      Case.countDocuments({ status: { $in: ['open', 'under_investigation'] } }),
+      Case.countDocuments({ priority: { $in: ['high', 'critical'] } }),
+      Case.countDocuments({ latitude: { $exists: true, $ne: null } }),
+    ]);
+
+    res.json({
+      markers,
+      stats: { total, open, high_priority: highPri, with_coordinates: withCoords },
+    });
+  } catch (err: unknown) {
+    res.status(500).json({ error: 'Failed to fetch map data', detail: String(err) });
+  }
+});
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   POST /api/cases/geocode-batch — MUST be before /:id
+   ═══════════════════════════════════════════════════════════════════════════ */
+router.post('/geocode-batch', async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const pending = await Case.find({
+      $or: [
+        { address:  { $exists: true, $ne: '' } },
+        { city:     { $exists: true, $ne: '' } },
+        { location: { $exists: true, $ne: '' } },
+      ],
+      latitude:  { $exists: false },
+      longitude: { $exists: false },
+    }).select('_id case_number address city state location incident_location').lean();
+
+    if (!pending.length) {
+      res.json({ message: 'No cases require geocoding.', geocoded: 0, total_pending: 0 });
+      return;
+    }
+
+    res.json({ message: `Geocoding ${pending.length} cases in background.`, total_pending: pending.length });
+
+    (async () => {
+      let geocoded = 0;
+      for (const c of pending) {
+        const addr = [c.address, c.city, c.state, c.location, c.incident_location].filter(Boolean).join(', ');
+        if (!addr) continue;
+        await sleep(1200);
+        const result = await geocodeAddress(addr);
+        if (result) {
+          await Case.findByIdAndUpdate(c._id, { latitude: result.latitude, longitude: result.longitude, geocoded_at: new Date() });
+          geocoded++;
+          logger.info(`Batch geocoded ${c.case_number}: ${result.latitude}, ${result.longitude}`);
+        }
+      }
+      logger.info(`Batch geocoding complete: ${geocoded}/${pending.length} cases geocoded`);
+    })().catch((err) => logger.error('Batch geocoding error', { err: String(err) }));
+  } catch (err: unknown) {
+    res.status(500).json({ error: 'Batch geocoding failed', detail: String(err) });
+  }
+});
 
 // GET /api/cases
 router.get('/', async (req: AuthRequest, res: Response): Promise<void> => {

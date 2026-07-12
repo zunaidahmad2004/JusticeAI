@@ -35,12 +35,14 @@ import analyticsRoutes from './routes/analytics';
 import caseFilingRoutes    from './routes/caseFiling';
 import courtHearingRoutes  from './routes/courtHearings';
 import reportsRoutes       from './routes/reports';
+import publicCrimeRoutes   from './routes/publicCrime';
+import { startCronService } from './services/cronService';
 
 const app  = express();
 const httpServer = createServer(app);
 const io   = new SocketServer(httpServer, {
   cors: {
-    origin: process.env.CLIENT_URL || 'http://localhost:5173',
+    origin: (process.env.CLIENT_URL || 'http://localhost:5173').split(',').map(u => u.trim()),
     methods: ['GET', 'POST'],
     credentials: true,
   },
@@ -51,8 +53,19 @@ const PORT = process.env.PORT || 5000;
 // ─── Security middleware ──────────────────────────────────────────────────────
 app.use(helmet());
 app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:5173',
+  origin: (origin, callback) => {
+    const allowed = (process.env.CLIENT_URL || 'http://localhost:5173')
+      .split(',')
+      .map(u => u.trim())
+      .filter(Boolean);
+    // Allow requests with no origin (curl, Postman, mobile apps)
+    if (!origin) return callback(null, true);
+    if (allowed.includes(origin) || allowed.includes('*')) return callback(null, true);
+    callback(new Error(`CORS: origin ${origin} not allowed`));
+  },
   credentials: true,
+  methods: ['GET','POST','PUT','DELETE','PATCH','OPTIONS'],
+  allowedHeaders: ['Content-Type','Authorization'],
 }));
 
 // ─── Rate limiting ────────────────────────────────────────────────────────────
@@ -111,6 +124,7 @@ app.use('/api/analytics', analyticsRoutes);
 app.use('/api/case-filing',    caseFilingRoutes);
 app.use('/api/court-hearings', courtHearingRoutes);
 app.use('/api/reports',        reportsRoutes);
+app.use('/api/public-crime',   publicCrimeRoutes);
 
 // ─── Health check ─────────────────────────────────────────────────────────────
 app.get('/api/health', (_req, res) => {
@@ -133,11 +147,21 @@ const start = async () => {
     logger.info(`JusticeAI server running on port ${PORT} [${process.env.NODE_ENV || 'development'}]`);
     logger.info(`AI backend: ${getAIStatus()}`);
   });
+  // Start scheduled public crime news refresh
+  startCronService().catch((err) => logger.warn('Cron start failed', { err: String(err) }));
 };
 
 start().catch((err) => {
   logger.error('Failed to start server', err);
   process.exit(1);
+});
+
+/* ─── Global crash prevention ─────────────────────────────────────────────── */
+process.on('uncaughtException', (err) => {
+  logger.error('Uncaught Exception — server kept alive', { message: err.message });
+});
+process.on('unhandledRejection', (reason) => {
+  logger.error('Unhandled Rejection — server kept alive', { reason: String(reason) });
 });
 
 export default app;

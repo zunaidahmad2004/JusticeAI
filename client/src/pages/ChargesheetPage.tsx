@@ -145,7 +145,7 @@ export default function ChargesheetPage() {
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-slate-200 truncate">{doc.title}</p>
                       <p className="text-xs text-slate-500 mt-0.5">
-                        {format(new Date(doc.created_at), 'dd MMM yyyy HH:mm')}
+                        {doc.created_at ? (() => { try { return format(new Date(doc.created_at), 'dd MMM yyyy HH:mm'); } catch { return '—'; } })() : '—'}
                       </p>
                     </div>
                     <span className={`badge text-xs ${doc.status === 'approved' ? 'bg-green-900/40 text-green-300 border-green-800' : 'bg-yellow-900/40 text-yellow-300 border-yellow-800'}`}>
