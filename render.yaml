@@ -1,11 +1,11 @@
 services:
-  # ─── Backend Web Service ─────────────────────────────────────────────────────
+  # ─── Backend ─────────────────────────────────────────────────────────────────
   - type: web
     name: justiceai-backend
     runtime: node
     rootDir: server
-    buildCommand: npm install && npm run build
-    startCommand: npm start
+    buildCommand: npm install --include=dev && node build.mjs
+    startCommand: node dist/index.js
     envVars:
       - key: NODE_ENV
         value: production
@@ -29,18 +29,10 @@ services:
         value: ./uploads
       - key: MAX_FILE_SIZE
         value: 52428800
-      - key: SMTP_HOST
-        sync: false
-      - key: SMTP_PORT
-        value: 587
-      - key: SMTP_USER
-        sync: false
-      - key: SMTP_PASS
-        sync: false
     healthCheckPath: /api/health
     autoDeploy: true
 
-  # ─── Frontend Static Site ─────────────────────────────────────────────────────
+  # ─── Frontend ─────────────────────────────────────────────────────────────────
   - type: web
     name: justiceai-frontend
     runtime: static
@@ -55,9 +47,6 @@ services:
         source: /*
         destination: /index.html
     headers:
-      - path: /*
-        name: Cache-Control
-        value: public, max-age=0, must-revalidate
       - path: /assets/*
         name: Cache-Control
         value: public, max-age=31536000, immutable
