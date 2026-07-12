@@ -2,7 +2,7 @@
   "compilerOptions": {
     "target": "ES2020",
     "module": "commonjs",
-    "moduleResolution": "node",
+    "moduleResolution": "node10",
     "lib": ["ES2020"],
     "outDir": "./dist",
     "rootDir": "./src",
@@ -11,14 +11,9 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    "declaration": true,
-    "declarationMap": true,
-    "sourceMap": true,
-    "baseUrl": ".",
-    "paths": {
-      "@google/genai": ["../node_modules/@google/genai/dist/genai.d.ts"]
-    },
-    "typeRoots": ["../node_modules/@types", "./node_modules/@types"]
+    "declaration": false,
+    "sourceMap": false,
+    "ignoreDeprecations": "5.0"
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]
