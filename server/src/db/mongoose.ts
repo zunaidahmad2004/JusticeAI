@@ -2,15 +2,20 @@ import mongoose from 'mongoose';
 import { logger } from '../utils/logger';
 
 function buildSafeUri(raw: string): string {
-  // If the URI already has %40 or other encoded chars, use it as-is
-  // This prevents double-encoding when special chars are already encoded
   try {
-    // Parse to validate
-    const url = new URL(raw);
-    const maskedUser = url.username ? url.username.substring(0, 3) + '***' : 'unknown';
-    logger.info(`MongoDB URI parsed — host: ${url.hostname}, user: ${maskedUser}, db: ${url.pathname}`);
+    // Multi-host Atlas URIs can't be parsed by standard URL parser — that's OK
+    if (raw.includes(',')) {
+      // Extract username from multi-host URI for logging only
+      const match = raw.match(/mongodb:\/\/([^:]+):/);
+      const user = match ? match[1].substring(0, 3) + '***' : 'unknown';
+      logger.info(`MongoDB URI detected (multi-host Atlas) — user: ${user}`);
+    } else {
+      const url = new URL(raw);
+      const maskedUser = url.username ? url.username.substring(0, 3) + '***' : 'unknown';
+      logger.info(`MongoDB URI parsed — host: ${url.hostname}, user: ${maskedUser}, db: ${url.pathname}`);
+    }
   } catch {
-    logger.warn('Could not parse MONGODB_URI as URL — using raw value');
+    // Non-fatal — just log and continue
   }
   return raw;
 }
