@@ -1,5 +1,5 @@
 services:
-  # ─── Backend ─────────────────────────────────────────────────────────────────
+  # Backend Web Service
   - type: web
     name: justiceai-backend
     runtime: node
@@ -27,21 +27,21 @@ services:
         sync: false
       - key: UPLOAD_DIR
         value: ./uploads
-      - key: MAX_FILE_SIZE
-        value: 52428800
     healthCheckPath: /api/health
     autoDeploy: true
 
-  # ─── Frontend ─────────────────────────────────────────────────────────────────
+  # Frontend Static Site
   - type: web
     name: justiceai-frontend
     runtime: static
     rootDir: client
-    buildCommand: npm install --also=dev && NODE_OPTIONS=--max-old-space-size=1536 npm run build
+    buildCommand: npm install && npm run build
     staticPublishPath: dist
     envVars:
       - key: VITE_API_URL
         sync: false
+      - key: NODE_OPTIONS
+        value: --max-old-space-size=1536
     routes:
       - type: rewrite
         source: /*
