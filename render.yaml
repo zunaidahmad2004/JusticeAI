@@ -36,9 +36,8 @@ services:
   - type: web
     name: justiceai-frontend
     runtime: static
-    rootDir: client
-    buildCommand: echo "Using pre-built dist"
-    staticPublishPath: ./dist
+    buildCommand: echo "pre-built"
+    staticPublishPath: client/dist
     envVars:
       - key: VITE_API_URL
         value: https://justiceai-rgpg.onrender.com
