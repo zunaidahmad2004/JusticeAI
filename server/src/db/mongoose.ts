@@ -13,14 +13,16 @@ export const connectDB = async (): Promise<void> => {
   const connect = async () => {
     try {
       await mongoose.connect(uri, {
-        serverSelectionTimeoutMS: 10000,
-        socketTimeoutMS: 45000,
+        serverSelectionTimeoutMS: 30000,
+        socketTimeoutMS: 60000,
+        connectTimeoutMS: 30000,
+        maxPoolSize: 10,
       });
       logger.info(`MongoDB connected: ${mongoose.connection.host}`);
     } catch (err: unknown) {
       logger.error('MongoDB connection failed', { err: String(err).substring(0, 200) });
       logger.info('Retrying MongoDB connection in 5 seconds...');
-      setTimeout(connect, 5000); // Retry instead of crashing
+      setTimeout(connect, 5000);
     }
   };
 
