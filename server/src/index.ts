@@ -126,6 +126,17 @@ app.use('/api/court-hearings', courtHearingRoutes);
 app.use('/api/reports',        reportsRoutes);
 app.use('/api/public-crime',   publicCrimeRoutes);
 
+// ─── Root route ───────────────────────────────────────────────────────────────
+app.get('/', (_req, res) => {
+  res.json({
+    status:  'ok',
+    service: 'JusticeAI Backend',
+    version: '1.0.0',
+    health:  '/api/health',
+    docs:    'https://justiceai-frontend.onrender.com',
+  });
+});
+
 // ─── Health check ─────────────────────────────────────────────────────────────
 app.get('/api/health', (_req, res) => {
   res.json({
