@@ -2,8 +2,10 @@
 node_modules/
 **/node_modules/
 
-# Build outputs
-dist/
+# Build outputs — server only
+server/dist/
+
+# Do NOT ignore client/dist — it is committed for Render deployment
 build/
 **/dist/
 **/build/
