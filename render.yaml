@@ -1,5 +1,5 @@
 services:
-  # Backend Web Service
+  # ─── Backend Web Service ──────────────────────────────────────────────────────
   - type: web
     name: justiceai-backend
     runtime: node
@@ -24,7 +24,7 @@ services:
       - key: GEMINI_API_KEY
         sync: false
       - key: CLIENT_URL
-        sync: false
+        value: https://justiceai-frontend.onrender.com
       - key: UPLOAD_DIR
         value: ./uploads
       - key: NODE_VERSION
@@ -32,16 +32,16 @@ services:
     healthCheckPath: /api/health
     autoDeploy: true
 
-  # Frontend - Node.js web service with SPA fallback (fixes /login 404)
+  # ─── Frontend Node.js Web Service (SPA server — handles all React routes) ─────
   - type: web
     name: justiceai-frontend
     runtime: node
     rootDir: client
-    buildCommand: echo "pre-built"
+    buildCommand: echo "dist already committed"
     startCommand: node server.mjs
     envVars:
       - key: PORT
         value: 3000
-      - key: VITE_API_URL
-        value: https://justiceai-rgpg.onrender.com
+      - key: NODE_VERSION
+        value: 20.18.0
     autoDeploy: true
