@@ -32,12 +32,14 @@ services:
     healthCheckPath: /api/health
     autoDeploy: true
 
-  # ─── Frontend Node.js Web Service (SPA server — handles all React routes) ─────
+  # ─── Frontend Node.js Web Service ─────────────────────────────────────────────
+  # Uses pre-built dist/ committed to repo
+  # server.mjs handles SPA routing — ALL paths return index.html
   - type: web
     name: justiceai-frontend
     runtime: node
     rootDir: client
-    buildCommand: echo "dist already committed"
+    buildCommand: echo "dist already committed to repo"
     startCommand: node server.mjs
     envVars:
       - key: PORT
