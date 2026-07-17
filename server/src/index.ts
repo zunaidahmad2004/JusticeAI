@@ -126,6 +126,33 @@ app.use('/api/court-hearings', courtHearingRoutes);
 app.use('/api/reports',        reportsRoutes);
 app.use('/api/public-crime',   publicCrimeRoutes);
 
+// ─── Serve frontend static files in production ───────────────────────────────
+import fs from 'fs';
+import path from 'path';
+
+const frontendDist = path.resolve(process.cwd(), './client');
+if (fs.existsSync(frontendDist)) {
+  logger.info(`Serving frontend from: ${frontendDist}`);
+
+  // Serve static assets
+  app.use(express.static(frontendDist, {
+    maxAge: '1y',
+    index: false,
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith('.html')) {
+        res.setHeader('Cache-Control', 'no-cache');
+      }
+    },
+  }));
+
+  // SPA fallback — serve index.html for all non-API routes
+  app.get('*', (req, res) => {
+    if (!req.path.startsWith('/api/') && !req.path.startsWith('/uploads/')) {
+      res.sendFile(path.join(frontendDist, 'index.html'));
+    }
+  });
+}
+
 // ─── Root route ───────────────────────────────────────────────────────────────
 app.get('/', (_req, res) => {
   res.json({

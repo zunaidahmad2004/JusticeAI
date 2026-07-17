@@ -1,5 +1,7 @@
 services:
-  # ─── Backend Web Service ──────────────────────────────────────────────────────
+  # ─── Single Unified Service (Backend + Frontend) ──────────────────────────────
+  # Backend serves API at /api/* AND frontend static files at /*
+  # This eliminates all SPA routing issues — no separate static site needed
   - type: web
     name: justiceai-backend
     runtime: node
@@ -24,7 +26,7 @@ services:
       - key: GEMINI_API_KEY
         sync: false
       - key: CLIENT_URL
-        value: https://justiceai-frontend.onrender.com
+        value: https://justiceai-backend.onrender.com
       - key: UPLOAD_DIR
         value: ./uploads
       - key: NODE_VERSION
@@ -32,14 +34,12 @@ services:
     healthCheckPath: /api/health
     autoDeploy: true
 
-  # ─── Frontend Node.js Web Service ─────────────────────────────────────────────
-  # Uses pre-built dist/ committed to repo
-  # server.mjs handles SPA routing — ALL paths return index.html
+  # ─── Frontend Standalone Web Service ─────────────────────────────────────────
   - type: web
     name: justiceai-frontend
     runtime: node
     rootDir: client
-    buildCommand: echo "dist already committed to repo"
+    buildCommand: echo "pre-built"
     startCommand: node server.mjs
     envVars:
       - key: PORT
