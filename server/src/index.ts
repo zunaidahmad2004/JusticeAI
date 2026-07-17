@@ -130,7 +130,7 @@ app.use('/api/public-crime',   publicCrimeRoutes);
 import fs from 'fs';
 import path from 'path';
 
-const frontendDist = path.resolve(process.cwd(), './client');
+const frontendDist = path.resolve(__dirname, './client');
 if (fs.existsSync(frontendDist)) {
   logger.info(`Serving frontend from: ${frontendDist}`);
 
@@ -146,10 +146,17 @@ if (fs.existsSync(frontendDist)) {
   }));
 
   // SPA fallback — serve index.html for all non-API routes
-  app.get('*', (req, res) => {
-    if (!req.path.startsWith('/api/') && !req.path.startsWith('/uploads/')) {
-      res.sendFile(path.join(frontendDist, 'index.html'));
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api/') || req.path.startsWith('/uploads/')) {
+      return next();
     }
+    const indexFile = path.join(frontendDist, 'index.html');
+    if (fs.existsSync(indexFile)) {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      return res.sendFile(indexFile);
+    }
+    next();
   });
 }
 

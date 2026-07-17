@@ -5117,7 +5117,7 @@ app.use("/api/case-filing", caseFiling_default);
 app.use("/api/court-hearings", courtHearings_default);
 app.use("/api/reports", reports_default);
 app.use("/api/public-crime", publicCrime_default);
-var frontendDist = import_path4.default.resolve(process.cwd(), "./client");
+var frontendDist = import_path4.default.resolve(__dirname, "./client");
 if (import_fs3.default.existsSync(frontendDist)) {
   logger.info(`Serving frontend from: ${frontendDist}`);
   app.use(import_express18.default.static(frontendDist, {
@@ -5129,10 +5129,17 @@ if (import_fs3.default.existsSync(frontendDist)) {
       }
     }
   }));
-  app.get("*", (req, res) => {
-    if (!req.path.startsWith("/api/") && !req.path.startsWith("/uploads/")) {
-      res.sendFile(import_path4.default.join(frontendDist, "index.html"));
+  app.get("*", (req, res, next) => {
+    if (req.path.startsWith("/api/") || req.path.startsWith("/uploads/")) {
+      return next();
     }
+    const indexFile = import_path4.default.join(frontendDist, "index.html");
+    if (import_fs3.default.existsSync(indexFile)) {
+      res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      return res.sendFile(indexFile);
+    }
+    next();
   });
 }
 app.get("/", (_req, res) => {
