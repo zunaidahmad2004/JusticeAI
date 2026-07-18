@@ -152,10 +152,13 @@ var _auth = null;
 function resolveAuth() {
   if (_auth) return _auth;
   const key = (process.env.GEMINI_API_KEY || "").trim();
-  if (key && key.length > 10) {
+  if (key && key.startsWith("AIza") && key.length >= 35) {
     _auth = { mode: "api_key", apiKey: key };
     logger.info(`Gemini: api-key auth (${key.substring(0, 8)}...)`);
     return _auth;
+  }
+  if (key && key.length > 0) {
+    logger.warn(`Gemini: GEMINI_API_KEY looks invalid (format: ${key.substring(0, 8)}...) \u2014 skipping, trying service account next`);
   }
   const b64 = (process.env.GEMINI_CREDENTIALS_B64 || "").trim();
   if (b64) {

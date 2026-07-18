@@ -121,12 +121,15 @@ let _auth: Auth | null = null;
 function resolveAuth(): Auth {
   if (_auth) return _auth;
 
-  // 1. Plain API key (AIzaSy...)
+  // 1. Plain API key — only accept if it looks valid (AIzaSy format, 39 chars)
   const key = (process.env.GEMINI_API_KEY || '').trim();
-  if (key && key.length > 10) {
+  if (key && key.startsWith('AIza') && key.length >= 35) {
     _auth = { mode: 'api_key', apiKey: key };
     logger.info(`Gemini: api-key auth (${key.substring(0, 8)}...)`);
     return _auth;
+  }
+  if (key && key.length > 0) {
+    logger.warn(`Gemini: GEMINI_API_KEY looks invalid (format: ${key.substring(0,8)}...) — skipping, trying service account next`);
   }
 
   // 2. Base64 service account from env (set this in Render dashboard)
