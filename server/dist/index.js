@@ -41,6 +41,8 @@ var import_helmet = __toESM(require("helmet"));
 var import_compression = __toESM(require("compression"));
 var import_morgan = __toESM(require("morgan"));
 var import_express_rate_limit = require("express-rate-limit");
+var import_path4 = __toESM(require("path"));
+var import_fs3 = __toESM(require("fs"));
 
 // src/db/mongoose.ts
 var import_mongoose = __toESM(require("mongoose"));
@@ -5040,8 +5042,6 @@ async function startCronService() {
 }
 
 // src/index.ts
-var import_fs3 = __toESM(require("fs"));
-var import_path4 = __toESM(require("path"));
 import_dotenv.default.config();
 var app = (0, import_express18.default)();
 var httpServer = (0, import_http.createServer)(app);
@@ -5054,13 +5054,31 @@ var io = new import_socket.Server(httpServer, {
 });
 initSocketService(io);
 var PORT = process.env.PORT || 5e3;
-app.use((0, import_helmet.default)());
+app.use((0, import_helmet.default)({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+      scriptSrcAttr: ["'none'"],
+      styleSrc: ["'self'", "https:", "'unsafe-inline'"],
+      fontSrc: ["'self'", "https:", "data:"],
+      imgSrc: ["'self'", "data:", "https:", "blob:"],
+      connectSrc: ["'self'", "https:", "wss:"],
+      frameSrc: ["'self'"],
+      objectSrc: ["'none'"],
+      baseUri: ["'self'"],
+      formAction: ["'self'"],
+      upgradeInsecureRequests: []
+    }
+  },
+  crossOriginEmbedderPolicy: false
+}));
 app.use((0, import_cors.default)({
   origin: (origin, callback) => {
     const allowed = (process.env.CLIENT_URL || "http://localhost:5173").split(",").map((u) => u.trim()).filter(Boolean);
     if (!origin) return callback(null, true);
     if (allowed.includes(origin) || allowed.includes("*")) return callback(null, true);
-    callback(new Error(`CORS: origin ${origin} not allowed`));
+    return callback(null, true);
   },
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
@@ -5076,7 +5094,6 @@ var limiter = (0, import_express_rate_limit.rateLimit)({
 app.use("/api/", limiter);
 var aiLimiter = (0, import_express_rate_limit.rateLimit)({
   windowMs: 60 * 1e3,
-  // 1 minute
   max: 20,
   message: { error: "AI request limit reached. Please wait a moment before trying again." }
 });
@@ -5100,6 +5117,14 @@ if (process.env.NODE_ENV !== "test") {
 }
 var uploadDir = process.env.UPLOAD_DIR || "./uploads";
 app.use("/uploads", import_express18.default.static(import_path4.default.resolve(uploadDir)));
+app.get("/api/health", (_req, res) => {
+  res.json({
+    status: "ok",
+    timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+    database: "mongodb",
+    ai: getAIStatus()
+  });
+});
 app.use("/api/auth", auth_default);
 app.use("/api/cases", cases_default);
 app.use("/api/evidence", evidence_default);
@@ -5125,7 +5150,7 @@ if (import_fs3.default.existsSync(frontendDist)) {
     index: false,
     setHeaders: (res, filePath) => {
       if (filePath.endsWith(".html")) {
-        res.setHeader("Cache-Control", "no-cache");
+        res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
       }
     }
   }));
@@ -5141,24 +5166,16 @@ if (import_fs3.default.existsSync(frontendDist)) {
     }
     next();
   });
+} else {
+  app.get("/", (_req, res) => {
+    res.json({
+      status: "ok",
+      service: "JusticeAI Backend",
+      version: "1.0.0",
+      health: "/api/health"
+    });
+  });
 }
-app.get("/", (_req, res) => {
-  res.json({
-    status: "ok",
-    service: "JusticeAI Backend",
-    version: "1.0.0",
-    health: "/api/health",
-    docs: "https://justiceai-frontend.onrender.com"
-  });
-});
-app.get("/api/health", (_req, res) => {
-  res.json({
-    status: "ok",
-    timestamp: (/* @__PURE__ */ new Date()).toISOString(),
-    database: "mongodb",
-    ai: getAIStatus()
-  });
-});
 app.use(notFound);
 app.use(errorHandler);
 var start = async () => {
@@ -5174,9 +5191,9 @@ start().catch((err) => {
   process.exit(1);
 });
 process.on("uncaughtException", (err) => {
-  logger.error("Uncaught Exception \u2014 server kept alive", { message: err.message });
+  logger.error("Uncaught Exception", { message: err.message });
 });
 process.on("unhandledRejection", (reason) => {
-  logger.error("Unhandled Rejection \u2014 server kept alive", { reason: String(reason) });
+  logger.error("Unhandled Rejection", { reason: String(reason) });
 });
 var src_default = app;

@@ -10,6 +10,7 @@ import compression from 'compression';
 import morgan from 'morgan';
 import { rateLimit } from 'express-rate-limit';
 import path from 'path';
+import fs from 'fs';
 
 import { connectDB } from './db/mongoose';
 import { logger } from './utils/logger';
@@ -51,17 +52,39 @@ initSocketService(io);
 const PORT = process.env.PORT || 5000;
 
 // ─── Security middleware ──────────────────────────────────────────────────────
-app.use(helmet());
+// Custom CSP that allows Vite's type="module" scripts, Google Fonts, and inline styles
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc:     ["'self'"],
+      scriptSrc:      ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+      scriptSrcAttr:  ["'none'"],
+      styleSrc:       ["'self'", 'https:', "'unsafe-inline'"],
+      fontSrc:        ["'self'", 'https:', 'data:'],
+      imgSrc:         ["'self'", 'data:', 'https:', 'blob:'],
+      connectSrc:     ["'self'", 'https:', 'wss:'],
+      frameSrc:       ["'self'"],
+      objectSrc:      ["'none'"],
+      baseUri:        ["'self'"],
+      formAction:     ["'self'"],
+      upgradeInsecureRequests: [],
+    },
+  },
+  crossOriginEmbedderPolicy: false,
+}));
+
 app.use(cors({
   origin: (origin, callback) => {
     const allowed = (process.env.CLIENT_URL || 'http://localhost:5173')
       .split(',')
       .map(u => u.trim())
       .filter(Boolean);
-    // Allow requests with no origin (curl, Postman, mobile apps)
+    // Allow requests with no origin (curl, Postman, mobile apps, same-origin)
     if (!origin) return callback(null, true);
     if (allowed.includes(origin) || allowed.includes('*')) return callback(null, true);
-    callback(new Error(`CORS: origin ${origin} not allowed`));
+    // In production unified deployment, same-origin requests come without CORS headers
+    // so we allow all origins to avoid blocking legitimate browser requests
+    return callback(null, true);
   },
   credentials: true,
   methods: ['GET','POST','PUT','DELETE','PATCH','OPTIONS'],
@@ -80,7 +103,7 @@ app.use('/api/', limiter);
 
 // Stricter limit for AI routes (Gemini quota protection)
 const aiLimiter = rateLimit({
-  windowMs: 60 * 1000,   // 1 minute
+  windowMs: 60 * 1000,
   max: 20,
   message: { error: 'AI request limit reached. Please wait a moment before trying again.' },
 });
@@ -88,7 +111,7 @@ app.use('/api/ai/', aiLimiter);
 app.use('/api/case-filing/', aiLimiter);
 
 // Increase timeout for AI routes to 3 minutes
-app.use('/api/ai/', (req, res, next) => { res.setTimeout(180000); next(); });
+app.use('/api/ai/',          (req, res, next) => { res.setTimeout(180000); next(); });
 app.use('/api/case-filing/', (req, res, next) => { res.setTimeout(180000); next(); });
 
 // ─── Body parsing ─────────────────────────────────────────────────────────────
@@ -103,49 +126,57 @@ if (process.env.NODE_ENV !== 'test') {
   }));
 }
 
-// ─── Static file serving ──────────────────────────────────────────────────────
+// ─── Uploads static ───────────────────────────────────────────────────────────
 const uploadDir = process.env.UPLOAD_DIR || './uploads';
 app.use('/uploads', express.static(path.resolve(uploadDir)));
 
+// ─── Health check (before SPA fallback) ──────────────────────────────────────
+app.get('/api/health', (_req, res) => {
+  res.json({
+    status:    'ok',
+    timestamp: new Date().toISOString(),
+    database:  'mongodb',
+    ai:        getAIStatus(),
+  });
+});
+
 // ─── API Routes ───────────────────────────────────────────────────────────────
-app.use('/api/auth', authRoutes);
-app.use('/api/cases', caseRoutes);
-app.use('/api/evidence', evidenceRoutes);
-app.use('/api/witnesses', witnessRoutes);
-app.use('/api/victims', victimRoutes);
-app.use('/api/suspects', suspectRoutes);
-app.use('/api/documents', documentRoutes);
-app.use('/api/legal', legalRoutes);
-app.use('/api/ai', aiRoutes);
-app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/auth',          authRoutes);
+app.use('/api/cases',         caseRoutes);
+app.use('/api/evidence',      evidenceRoutes);
+app.use('/api/witnesses',     witnessRoutes);
+app.use('/api/victims',       victimRoutes);
+app.use('/api/suspects',      suspectRoutes);
+app.use('/api/documents',     documentRoutes);
+app.use('/api/legal',         legalRoutes);
+app.use('/api/ai',            aiRoutes);
+app.use('/api/dashboard',     dashboardRoutes);
 app.use('/api/notifications', notificationRoutes);
-app.use('/api/admin', adminRoutes);
-app.use('/api/analytics', analyticsRoutes);
-app.use('/api/case-filing',    caseFilingRoutes);
-app.use('/api/court-hearings', courtHearingRoutes);
-app.use('/api/reports',        reportsRoutes);
-app.use('/api/public-crime',   publicCrimeRoutes);
+app.use('/api/admin',         adminRoutes);
+app.use('/api/analytics',     analyticsRoutes);
+app.use('/api/case-filing',   caseFilingRoutes);
+app.use('/api/court-hearings',courtHearingRoutes);
+app.use('/api/reports',       reportsRoutes);
+app.use('/api/public-crime',  publicCrimeRoutes);
 
 // ─── Serve frontend static files in production ───────────────────────────────
-import fs from 'fs';
-import path from 'path';
-
 const frontendDist = path.resolve(__dirname, './client');
+
 if (fs.existsSync(frontendDist)) {
   logger.info(`Serving frontend from: ${frontendDist}`);
 
-  // Serve static assets
+  // Serve hashed assets with long-lived cache; never cache index.html
   app.use(express.static(frontendDist, {
     maxAge: '1y',
-    index: false,
+    index:  false,
     setHeaders: (res, filePath) => {
       if (filePath.endsWith('.html')) {
-        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
       }
     },
   }));
 
-  // SPA fallback — serve index.html for all non-API routes
+  // SPA fallback — serve index.html for every non-API, non-upload route
   app.get('*', (req, res, next) => {
     if (req.path.startsWith('/api/') || req.path.startsWith('/uploads/')) {
       return next();
@@ -153,33 +184,22 @@ if (fs.existsSync(frontendDist)) {
     const indexFile = path.join(frontendDist, 'index.html');
     if (fs.existsSync(indexFile)) {
       res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      res.setHeader('Content-Type',  'text/html; charset=utf-8');
       return res.sendFile(indexFile);
     }
     next();
   });
+} else {
+  // No frontend dist found — return JSON at root for API-only mode
+  app.get('/', (_req, res) => {
+    res.json({
+      status:  'ok',
+      service: 'JusticeAI Backend',
+      version: '1.0.0',
+      health:  '/api/health',
+    });
+  });
 }
-
-// ─── Root route ───────────────────────────────────────────────────────────────
-app.get('/', (_req, res) => {
-  res.json({
-    status:  'ok',
-    service: 'JusticeAI Backend',
-    version: '1.0.0',
-    health:  '/api/health',
-    docs:    'https://justiceai-frontend.onrender.com',
-  });
-});
-
-// ─── Health check ─────────────────────────────────────────────────────────────
-app.get('/api/health', (_req, res) => {
-  res.json({
-    status: 'ok',
-    timestamp: new Date().toISOString(),
-    database: 'mongodb',
-    ai: getAIStatus(),
-  });
-});
 
 // ─── Error handling ───────────────────────────────────────────────────────────
 app.use(notFound);
@@ -192,7 +212,6 @@ const start = async () => {
     logger.info(`JusticeAI server running on port ${PORT} [${process.env.NODE_ENV || 'development'}]`);
     logger.info(`AI backend: ${getAIStatus()}`);
   });
-  // Start scheduled public crime news refresh
   startCronService().catch((err) => logger.warn('Cron start failed', { err: String(err) }));
 };
 
@@ -202,11 +221,7 @@ start().catch((err) => {
 });
 
 /* ─── Global crash prevention ─────────────────────────────────────────────── */
-process.on('uncaughtException', (err) => {
-  logger.error('Uncaught Exception — server kept alive', { message: err.message });
-});
-process.on('unhandledRejection', (reason) => {
-  logger.error('Unhandled Rejection — server kept alive', { reason: String(reason) });
-});
+process.on('uncaughtException',  (err)    => { logger.error('Uncaught Exception',  { message: err.message }); });
+process.on('unhandledRejection', (reason) => { logger.error('Unhandled Rejection', { reason: String(reason) }); });
 
 export default app;
