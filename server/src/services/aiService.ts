@@ -78,11 +78,12 @@ const GEMINI_REST_BASE = 'https://generativelanguage.googleapis.com/v1beta';
 
 // ─── Auth detection ───────────────────────────────────────────────────────────
 
-type AuthMode = 'api_key' | 'service_account' | 'none';
+type AuthMode = 'api_key' | 'bearer_token' | 'service_account' | 'none';
 
 interface AuthResult {
   mode: AuthMode;
   apiKey?: string;
+  bearerToken?: string;
   credPath?: string;
 }
 
@@ -91,11 +92,23 @@ let _cachedAuth: AuthResult | null = null;
 const detectAuth = (): AuthResult => {
   if (_cachedAuth) return _cachedAuth;
 
-  // Option 1: simple API key
+  // Option 1: standard API key (AIzaSy... format)
   const key = (process.env.GEMINI_API_KEY || '').trim();
-  if (key && key !== 'your_gemini_api_key' && key !== 'PASTE_YOUR_KEY_HERE' && key !== '' && key.startsWith('AIza')) {
+  if (key && key !== 'your_gemini_api_key' && key !== 'PASTE_YOUR_KEY_HERE' && key !== '') {
+    if (key.startsWith('AIza')) {
+      _cachedAuth = { mode: 'api_key', apiKey: key };
+      logger.info('Gemini: using API key authentication (AIzaSy format)');
+      return _cachedAuth;
+    }
+    // AQ. format = OAuth2 bearer token (org/workspace Google accounts)
+    if (key.startsWith('AQ.') || key.startsWith('ya29.')) {
+      _cachedAuth = { mode: 'bearer_token', bearerToken: key };
+      logger.info('Gemini: using OAuth2 bearer token authentication');
+      return _cachedAuth;
+    }
+    // Unknown format — try as API key anyway
     _cachedAuth = { mode: 'api_key', apiKey: key };
-    logger.info('Gemini: using API key authentication');
+    logger.warn(`Gemini: unrecognised key format, trying as API key`);
     return _cachedAuth;
   }
 
@@ -130,6 +143,7 @@ const detectAuth = (): AuthResult => {
 export const getAIStatus = (): string => {
   const auth = detectAuth();
   if (auth.mode === 'api_key') return `${GEMINI_MODEL} (api-key)`;
+  if (auth.mode === 'bearer_token') return `${GEMINI_MODEL} (bearer-token)`;
   if (auth.mode === 'service_account') return `${GEMINI_MODEL} (service-account)`;
   return 'mock-mode';
 };
@@ -215,6 +229,9 @@ const callGeminiREST = async (request: GeminiRequest): Promise<string> => {
   if (auth.mode === 'api_key') {
     url = `${GEMINI_REST_BASE}/models/${GEMINI_MODEL}:generateContent?key=${auth.apiKey}`;
     authHeader = '';
+  } else if (auth.mode === 'bearer_token') {
+    url = `${GEMINI_REST_BASE}/models/${GEMINI_MODEL}:generateContent`;
+    authHeader = `Bearer ${auth.bearerToken}`;
   } else if (auth.mode === 'service_account' && auth.credPath) {
     const token = await getServiceAccountToken(auth.credPath);
     url = `${GEMINI_REST_BASE}/models/${GEMINI_MODEL}:generateContent`;
@@ -261,6 +278,9 @@ export const callGeminiStream = async (
 
   if (auth.mode === 'api_key') {
     url = `${GEMINI_REST_BASE}/models/${GEMINI_MODEL}:streamGenerateContent?key=${auth.apiKey}&alt=sse`;
+  } else if (auth.mode === 'bearer_token') {
+    url = `${GEMINI_REST_BASE}/models/${GEMINI_MODEL}:streamGenerateContent?alt=sse`;
+    headers['Authorization'] = `Bearer ${auth.bearerToken}`;
   } else if (auth.mode === 'service_account' && auth.credPath) {
     const token = await getServiceAccountToken(auth.credPath);
     url = `${GEMINI_REST_BASE}/models/${GEMINI_MODEL}:streamGenerateContent?alt=sse`;
@@ -335,8 +355,8 @@ export const callLLM = async (prompt: string): Promise<string> => {
     const msg = String(err).toLowerCase();
     if (msg.includes('429') || msg.includes('quota')) {
       logger.warn('Gemini rate-limited — using mock response');
-    } else if (msg.includes('401') || msg.includes('403') || msg.includes('permission')) {
-      logger.error('Gemini auth failed — check credentials');
+    } else if (msg.includes('401') || msg.includes('403') || msg.includes('permission') || msg.includes('invalid')) {
+      logger.error(`Gemini auth failed (${auth.mode}) — key may be expired or invalid`);
       _cachedAuth = null; // force re-detect next call
       _tokenCache = null;
     } else {
