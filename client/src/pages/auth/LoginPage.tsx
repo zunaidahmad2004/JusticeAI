@@ -30,8 +30,13 @@ export default function LoginPage() {
         toast.success('Welcome back!');
         navigate('/dashboard');
       }
-    } catch {
-      // Error handled by API interceptor
+    } catch (err: unknown) {
+      // API interceptor shows toast for auth errors, but fallback here in case it doesn't
+      const message =
+        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
+        (err as { message?: string })?.message ||
+        'Login failed. Please check your credentials.';
+      toast.error(message);
     }
   };
 
