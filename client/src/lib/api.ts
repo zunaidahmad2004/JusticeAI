@@ -68,11 +68,10 @@ api.interceptors.response.use(
       err.message ||
       'Something went wrong';
 
-    // Always show a toast for auth endpoint errors (wrong password, user not found, etc.)
-    // For 401 on non-auth endpoints we skip the toast since redirect handles it
-    if (isAuthEndpoint) {
-      toast.error(message);
-    } else if (err.response?.status !== 401) {
+    // Show toast for non-auth-endpoint errors only.
+    // Auth endpoint errors (login/register) are handled by the calling code
+    // to avoid duplicate toasts.
+    if (!isAuthEndpoint && err.response?.status !== 401) {
       toast.error(message);
     }
 
