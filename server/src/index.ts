@@ -140,6 +140,20 @@ app.get('/api/health', (_req, res) => {
   });
 });
 
+// ─── AI env debug (temporary — remove after fix confirmed) ───────────────────
+app.get('/api/ai-debug', (_req, res) => {
+  const apiKey  = process.env.GEMINI_API_KEY   || '';
+  const b64     = process.env.GEMINI_CREDENTIALS_B64 || '';
+  res.json({
+    GEMINI_API_KEY_length:          apiKey.length,
+    GEMINI_API_KEY_prefix:          apiKey.substring(0, 8),
+    GEMINI_CREDENTIALS_B64_length:  b64.length,
+    GEMINI_CREDENTIALS_B64_prefix:  b64.substring(0, 20),
+    cwd: process.cwd(),
+    ai_status: getAIStatus(),
+  });
+});
+
 // ─── API Routes ───────────────────────────────────────────────────────────────
 app.use('/api/auth',          authRoutes);
 app.use('/api/cases',         caseRoutes);
