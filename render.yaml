@@ -7,7 +7,7 @@ services:
     runtime: node
     rootDir: server
     buildCommand: npm install --include=dev && node build.mjs && node -e "const b=process.env.GEMINI_CREDENTIALS_B64;if(b){require('fs').writeFileSync('gemini-credentials.json',Buffer.from(b,'base64').toString('utf8'));console.log('Gemini credentials written');}"
-    startCommand: node dist/index.js
+    startCommand: node -e "const b=process.env.GEMINI_CREDENTIALS_B64;if(b){require('fs').writeFileSync('gemini-credentials.json',Buffer.from(b,'base64').toString('utf8'));console.log('Wrote gemini creds');}" && node dist/index.js
     envVars:
       - key: NODE_ENV
         value: production
