@@ -110,74 +110,23 @@ function AIChatInner() {
     // Streaming placeholder
     setMessages((prev) => [...prev, { role: 'assistant', content: '', timestamp: new Date().toISOString() }]);
 
-    try {
-      const response = await fetch('/api/ai/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('accessToken')}`,
-        },
-        body: JSON.stringify({ message: msg, session_id: sessionId, stream: true }),
+    const updateLastMessage = (content: string) => {
+      setMessages((prev) => {
+        const updated = [...prev];
+        updated[updated.length - 1] = { role: 'assistant', content, timestamp: new Date().toISOString() };
+        return updated;
       });
+    };
 
-      if (response.ok && response.body) {
-        const reader  = response.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
-        let fullText = '';
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n');
-          buffer = lines.pop() ?? '';
-
-          for (const line of lines) {
-            if (!line.startsWith('data: ')) continue;
-            const data = line.slice(6).trim();
-            try {
-              const parsed = JSON.parse(data) as { chunk?: string; done?: boolean; session_id?: string };
-              if (parsed.chunk) {
-                fullText += parsed.chunk;
-                setMessages((prev) => {
-                  const updated = [...prev];
-                  updated[updated.length - 1] = { role: 'assistant', content: fullText, timestamp: new Date().toISOString() };
-                  return updated;
-                });
-              }
-              if (parsed.done && parsed.session_id) setSessionId(parsed.session_id);
-            } catch { /* skip */ }
-          }
-        }
-      } else {
-        // Non-streaming fallback
-        const res  = await api.post('/ai/chat', { message: msg, session_id: sessionId });
-        const data = res.data as { response: string; session_id: string };
-        setMessages((prev) => {
-          const updated = [...prev];
-          updated[updated.length - 1] = { role: 'assistant', content: data.response, timestamp: new Date().toISOString() };
-          return updated;
-        });
-        setSessionId(data.session_id);
-      }
-    } catch {
-      try {
-        const res  = await api.post('/ai/chat', { message: msg, session_id: sessionId });
-        const data = res.data as { response: string; session_id: string };
-        setMessages((prev) => {
-          const updated = [...prev];
-          updated[updated.length - 1] = { role: 'assistant', content: data.response, timestamp: new Date().toISOString() };
-          return updated;
-        });
-        setSessionId(data.session_id);
-      } catch {
-        setMessages((prev) => {
-          const updated = [...prev];
-          updated[updated.length - 1] = { role: 'assistant', content: 'I encountered an error. Please try again.', timestamp: new Date().toISOString() };
-          return updated;
-        });
-      }
+    try {
+      // Always use non-streaming for reliability — streaming requires SSE which can fail silently
+      const res  = await api.post('/ai/chat', { message: msg, session_id: sessionId, stream: false });
+      const data = res.data as { response: string; session_id: string };
+      updateLastMessage(data.response || 'No response received. Please try again.');
+      if (data.session_id) setSessionId(data.session_id);
+    } catch (err: unknown) {
+      const errMsg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      updateLastMessage(errMsg || 'I encountered an error generating the response. Please try again.');
     } finally {
       setLoading(false);
     }

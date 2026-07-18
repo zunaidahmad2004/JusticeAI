@@ -93,7 +93,7 @@ const detectAuth = (): AuthResult => {
 
   // Option 1: simple API key
   const key = (process.env.GEMINI_API_KEY || '').trim();
-  if (key && key !== 'your_gemini_api_key' && key !== 'PASTE_YOUR_KEY_HERE' && key !== '') {
+  if (key && key !== 'your_gemini_api_key' && key !== 'PASTE_YOUR_KEY_HERE' && key !== '' && key.startsWith('AIza')) {
     _cachedAuth = { mode: 'api_key', apiKey: key };
     logger.info('Gemini: using API key authentication');
     return _cachedAuth;
@@ -354,7 +354,9 @@ export const chatWithHistory = async (
   newMessage: string
 ): Promise<string> => {
   const auth = detectAuth();
-  if (auth.mode === 'none') return getMockResponse(newMessage);
+  if (auth.mode === 'none') {
+    return `**JusticeAI is running without an AI key configured.**\n\nTo enable full AI responses, please set a valid **GEMINI_API_KEY** (starts with \`AIzaSy\`) in the Render environment variables.\n\nYou can get a free key at [Google AI Studio](https://aistudio.google.com/app/apikey).\n\n---\n\nIn the meantime, here is a general answer based on built-in knowledge:\n\n${getMockResponse(newMessage)}`;
+  }
 
   try {
     const contents: GeminiContent[] = [];
