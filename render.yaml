@@ -25,6 +25,8 @@ services:
         value: 30d
       - key: GEMINI_API_KEY
         sync: false
+      - key: GEMINI_CREDENTIALS_B64
+        sync: false
       - key: CLIENT_URL
         value: https://justiceai-backend.onrender.com
       - key: UPLOAD_DIR
