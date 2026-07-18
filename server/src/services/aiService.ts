@@ -121,6 +121,18 @@ let _auth: Auth | null = null;
 function resolveAuth(): Auth {
   if (_auth) return _auth;
 
+  // 0. Embedded fallback credentials (service account — loaded if no env var set)
+  //    This allows deployment without requiring manual env var configuration
+  const EMBEDDED_CREDS = {
+    type: 'service_account',
+    project_id: 'gen-lang-client-0826711394',
+    private_key_id: '07da8e2d1bc6942fc6c630f4c964d849e3861b8c',
+    private_key: '-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDOy8vwrf9yI35U\nEDftvCm3nrwxiOVw4fuHD2NZpDUWAFc2jKljQsCH/xyjG5g0Fsdja5fuMceT/uSf\n/KBSolCHddv4QJv4AyhQu+xsdwMJLmGzERCAwNPR9gfY8WFAMBIAL+8/t5ZHolBf\nDwqrKazXqk392qYkTFymqSCEabVmrWmE4ZVyxxFPRaPjm2I8mxE0Q4drk7UOvM3e\n3fbXE7l3RzlzXwUNOQkUtaup4q1Sbb4qyuBuZB3GrmTA1YvD/1pitj2Yr/L3KorE\nm/Vrj06QvY92jJ7n+Rqx76fXDbgvKzBqvjVivlHJMAwXPwABn8krEDJRpKe/vFO1\n2NYQN56xAgMBAAECggEAP2ehChRvZBGZ5DBs1YmByPj0fsOYhbnkIw8GyS9dz3cf\nRmxuay7GVWxU3XXSfvYVAFi25qOAq9HVS3Brv6pgwofSgBVfPPXK4KYd4UvENIZy\nEjNDOhblW1TyJwQra0DR5BjOZFznyOLtfZfhD4XhpuZir1jg4/Q93COzAqZepjIr\nmVW9//IXo8/PoWrcvaWmKTPh+mUhRb899Llg6lMqZA5D+sDhEv5CahfO4p5j3767\nhfOxKcQ9mGQs3gJWXMyBSipHXCX63zEvMzSNsV4dr2Ap4nbA7zPuvSr2tjs7aCcO\nLu3nf97JHAG3CFlfAlvtJO5fKjb7aINfJIERXo4qGQKBgQD8jrlr43tIhU8f/VKd\ngRnrMt4ZUGFHDFmMqt6pIbyj+qX647kGUNc60IEp+G/ZJNc9uYgr5O9FtEl8tNMb\nI/JakELbmn+t50alefmMrsc1B/y8WWdR7gN2altYfv82vwyDVRc8Mcp7/6bWROBA\nZa4r1NabI83lCm2FcfECHSnDkwKBgQDRnWRhcSBSAFG92fiUhG/MggufaC8lol8h\ndIWQRDt6zmM5mt/P2pWqYsDJ0oFyvWqIOwxxjmg9S/uBDa0GgtBa7k5dtPD2vxDw\nkwbkSskUft5qqY8nPZ+/oaFbe5oxYwrmL52Q07d1vfug9yIJh+EB/5KkjHh9DTrv\nfjon/PJHKwKBgCPDEf5098ANIGcnN8uVvFXRniF3gE7PMN76Uw0f+dY+Z8Je/JQo\nXlG1tJR82VmmHdRfsSiGAluca8t8z2fIb0jjpJP0DKBTX22PGAcTuKGJv//rqPWw\n/kyGQukFEp5t7xeptOCRLFrimH0+w4Ja447RVJIjP8Ru9ZMvzzC9cGyBAoGBAL1S\n9ExSege2hB3+1teFutizCL5kwliyjEvSS6SfDD4CVXq9GLNK0W1AnrJrMEIrNSJw\neu/B2QKsMzA/4uyDkJ7gqOVYPWAP+MPheBMQPQgHAurB1StzLGtQGEZhoEZFF54K\nmb0qjISLINAlBpgnIyLD7HY07cq8/WM81lgxzb5bAoGAdZftec85B1BISKy9diKi\neA90xqhURyrO+M3a1ctQ7PhZXxqJWxzybwmQ9H6gCd4J31T+6zOUgv85aOQbWQBf\nRwduEMh5AvgFS5J/h9SgYNgBKnIZK+hBDx/8mwZegaa0bkTRvyF8WXLUnSyw0jcX\nFzTFVKo6lYdLiIUBBT3RRvw=\n-----END PRIVATE KEY-----\n',
+    client_email: 'ais-gemini-key-2631f5387293435@50716466609.iam.gserviceaccount.com',
+    client_id: '108936804100194995499',
+    token_uri: 'https://oauth2.googleapis.com/token',
+  };
+
   // 1. Plain API key — only accept if it looks valid (AIzaSy format, 39 chars)
   const key = (process.env.GEMINI_API_KEY || '').trim();
   if (key && key.startsWith('AIza') && key.length >= 35) {
@@ -168,6 +180,17 @@ function resolveAuth(): Auth {
         }
       } catch { /* skip */ }
     }
+  }
+
+  // 4. Embedded fallback service account (always available)
+  try {
+    const tmp = path.resolve(process.cwd(), '.gemini-embedded.json');
+    fs.writeFileSync(tmp, JSON.stringify(EMBEDDED_CREDS), 'utf8');
+    _auth = { mode: 'service_account', credPath: tmp };
+    logger.info(`Gemini: using embedded service account (${EMBEDDED_CREDS.client_email})`);
+    return _auth;
+  } catch (e) {
+    logger.error('Gemini: failed to write embedded credentials', { err: String(e) });
   }
 
   throw new Error(
