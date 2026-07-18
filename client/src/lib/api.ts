@@ -1,7 +1,11 @@
 import axios, { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
 
-/* ─── Base URL — uses env var in production, proxy in dev ─────────────────── */
+/* ─── Base URL ───────────────────────────────────────────────────────────────
+   In production (Render unified deployment): VITE_API_URL is not set,
+   so we use relative /api — same origin, no CORS issues.
+   In dev: proxy handles /api → localhost:5000
+   ─────────────────────────────────────────────────────────────────────────── */
 const BASE_URL = import.meta.env.VITE_API_URL
   ? `${import.meta.env.VITE_API_URL}/api`
   : '/api';
@@ -23,23 +27,38 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (res) => res,
   async (err: AxiosError) => {
-    if (err.response?.status === 401) {
+    // Never redirect on /auth/* calls — let the calling code handle it
+    const url = err.config?.url || '';
+    const isAuthEndpoint = url.includes('/auth/');
+
+    if (err.response?.status === 401 && !isAuthEndpoint) {
       const refreshToken = localStorage.getItem('refreshToken');
-      if (refreshToken && err.config && !err.config.url?.includes('/auth/refresh')) {
+      if (refreshToken && !url.includes('/auth/refresh')) {
         try {
           const res = await axios.post(`${BASE_URL}/auth/refresh`, { refreshToken });
           const { accessToken } = res.data as { accessToken: string };
           localStorage.setItem('accessToken', accessToken);
-          err.config.headers = err.config.headers ?? {};
-          err.config.headers.Authorization = `Bearer ${accessToken}`;
-          return api(err.config);
+          err.config!.headers = err.config!.headers ?? {};
+          err.config!.headers.Authorization = `Bearer ${accessToken}`;
+          return api(err.config!);
         } catch {
-          localStorage.clear();
-          window.location.href = '/login';
+          // Refresh failed — clear tokens and redirect
+          localStorage.removeItem('accessToken');
+          localStorage.removeItem('refreshToken');
+          // Use replace to avoid adding to history stack
+          if (!window.location.pathname.startsWith('/login') &&
+              !window.location.pathname.startsWith('/register') &&
+              window.location.pathname !== '/') {
+            window.location.replace('/login');
+          }
         }
-      } else {
-        localStorage.clear();
-        window.location.href = '/login';
+      } else if (!refreshToken) {
+        // No refresh token — only redirect if on a protected page
+        if (!window.location.pathname.startsWith('/login') &&
+            !window.location.pathname.startsWith('/register') &&
+            window.location.pathname !== '/') {
+          window.location.replace('/login');
+        }
       }
     }
 
