@@ -112,7 +112,25 @@ const detectAuth = (): AuthResult => {
     return _cachedAuth;
   }
 
-  // Option 2: service account JSON
+  // Option 2: base64-encoded service account JSON (Render env var: GEMINI_CREDENTIALS_B64)
+  const b64 = (process.env.GEMINI_CREDENTIALS_B64 || '').trim();
+  if (b64) {
+    try {
+      const json = JSON.parse(Buffer.from(b64, 'base64').toString('utf8')) as { client_email?: string; type?: string };
+      if (json.type === 'service_account') {
+        // Write to a temp file that aiService can use
+        const tmpPath = path.resolve(process.cwd(), '.gemini-credentials-tmp.json');
+        fs.writeFileSync(tmpPath, Buffer.from(b64, 'base64').toString('utf8'));
+        logger.info(`Gemini: using service account from GEMINI_CREDENTIALS_B64 — ${json.client_email}`);
+        _cachedAuth = { mode: 'service_account', credPath: tmpPath };
+        return _cachedAuth;
+      }
+    } catch {
+      logger.warn('Gemini: GEMINI_CREDENTIALS_B64 is invalid JSON, ignoring');
+    }
+  }
+
+  // Option 3: service account JSON file on disk
   const candidates = [
     process.env.GOOGLE_APPLICATION_CREDENTIALS,
     path.resolve(process.cwd(), 'gemini-credentials.json'),

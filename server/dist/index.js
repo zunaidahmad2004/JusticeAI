@@ -166,6 +166,21 @@ var detectAuth = () => {
     logger.warn(`Gemini: unrecognised key format, trying as API key`);
     return _cachedAuth;
   }
+  const b64 = (process.env.GEMINI_CREDENTIALS_B64 || "").trim();
+  if (b64) {
+    try {
+      const json = JSON.parse(Buffer.from(b64, "base64").toString("utf8"));
+      if (json.type === "service_account") {
+        const tmpPath = import_path.default.resolve(process.cwd(), ".gemini-credentials-tmp.json");
+        import_fs.default.writeFileSync(tmpPath, Buffer.from(b64, "base64").toString("utf8"));
+        logger.info(`Gemini: using service account from GEMINI_CREDENTIALS_B64 \u2014 ${json.client_email}`);
+        _cachedAuth = { mode: "service_account", credPath: tmpPath };
+        return _cachedAuth;
+      }
+    } catch {
+      logger.warn("Gemini: GEMINI_CREDENTIALS_B64 is invalid JSON, ignoring");
+    }
+  }
   const candidates = [
     process.env.GOOGLE_APPLICATION_CREDENTIALS,
     import_path.default.resolve(process.cwd(), "gemini-credentials.json"),
