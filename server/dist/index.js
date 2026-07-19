@@ -3787,9 +3787,27 @@ router10.get("/", async (req, res) => {
       id: c._id,
       io_name: c.assigned_io?.full_name
     })),
-    recent_notifications: recentNotifications.map((n) => ({ ...n, id: n._id }))
+    recent_notifications: recentNotifications.map((n) => ({ ...n, id: n._id })),
+    weekly_chart: await getWeeklyChart(caseFilter)
   });
 });
+async function getWeeklyChart(caseFilter) {
+  const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const result = [];
+  for (let i = 6; i >= 0; i--) {
+    const start2 = /* @__PURE__ */ new Date();
+    start2.setHours(0, 0, 0, 0);
+    start2.setDate(start2.getDate() - i);
+    const end = new Date(start2);
+    end.setHours(23, 59, 59, 999);
+    const [filings, resolved] = await Promise.all([
+      Case_default.countDocuments({ ...caseFilter, createdAt: { $gte: start2, $lte: end } }),
+      Case_default.countDocuments({ ...caseFilter, status: { $in: ["closed", "chargesheet_filed"] }, updatedAt: { $gte: start2, $lte: end } })
+    ]);
+    result.push({ name: days[start2.getDay()], filings, resolved });
+  }
+  return result;
+}
 var dashboard_default = router10;
 
 // src/routes/notifications.ts
