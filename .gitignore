@@ -1,46 +1,72 @@
 # Dependencies
 node_modules/
-**/node_modules/
+.pnp
+.pnp.js
 
-# Build outputs — server only
-server/dist/
-
-# Do NOT ignore client/dist — it is committed for Render deployment
-build/
-**/dist/
-**/build/
-
-# Environment files (NEVER commit secrets)
+# Environment variables — NEVER commit secrets
 .env
 .env.local
 .env.*.local
 server/.env
-**/.env
+!server/.env.example
+!server/.env.production.example
+
+# Build outputs
+dist/
+build/
+*.tsbuildinfo
+
+# Credentials — NEVER commit
+gemini-credentials.json
+service-account.json
+*.pem
+*.key
+*.p12
+*.pfx
+.gemini-sa.json
+.gemini-embedded.json
+
+# Uploads
+server/uploads/
+uploads/
 
 # Logs
-*.log
 logs/
-**/logs/
-
-# Uploads (local files — use cloud storage in production)
-uploads/*
-!uploads/.gitkeep
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
 
 # OS files
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
+desktop.ini
 
-# Editor
-*.local
+# IDE
 .vscode/settings.json
 .idea/
+*.swp
+*.swo
+*~
 
-# TypeScript
-*.tsbuildinfo
-
-# Coverage
+# Testing
 coverage/
+.nyc_output/
 
-# Gemini credentials (NEVER commit)
-*credentials.json
-*service-account*.json
+# Temp files
+*.tmp
+*.temp
+RENDER_ENV_VALUE.txt
+*.ps1
+test-*.mjs
+test-*.ps1
+verify-*.ps1
+
+# Vercel (not used — deployed on Render)
+.vercel/

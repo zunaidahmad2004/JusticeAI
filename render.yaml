@@ -1,13 +1,15 @@
 services:
-  # ─── Single Unified Service (Backend + Frontend) ──────────────────────────────
-  # Backend serves API at /api/* AND frontend static files at /*
-  # This eliminates all SPA routing issues — no separate static site needed
+  # ─── Unified Full-Stack Service ───────────────────────────────────────────────
+  # Express backend serves API at /api/* AND React frontend at /*
+  # Single domain: https://justiceai-rgpg.onrender.com
   - type: web
     name: justiceai-backend
     runtime: node
     rootDir: server
     buildCommand: npm install --include=dev && node build.mjs
     startCommand: node prestart.mjs && node dist/index.js
+    healthCheckPath: /api/health
+    autoDeploy: true
     envVars:
       - key: NODE_ENV
         value: production
@@ -28,24 +30,8 @@ services:
       - key: GEMINI_CREDENTIALS_B64
         sync: false
       - key: CLIENT_URL
-        value: https://justiceai-backend.onrender.com
+        value: https://justiceai-rgpg.onrender.com
       - key: UPLOAD_DIR
         value: ./uploads
       - key: NODE_VERSION
         value: 20.18.0
-    healthCheckPath: /api/health
-    autoDeploy: true
-
-  # ─── Frontend Standalone Web Service ─────────────────────────────────────────
-  - type: web
-    name: justiceai-frontend
-    runtime: node
-    rootDir: client
-    buildCommand: echo "pre-built"
-    startCommand: node server.mjs
-    envVars:
-      - key: PORT
-        value: 3000
-      - key: NODE_VERSION
-        value: 20.18.0
-    autoDeploy: true

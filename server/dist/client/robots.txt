@@ -1,0 +1,14 @@
+User-agent: *
+Allow: /
+Allow: /login
+Allow: /register
+
+# Disallow authenticated/private pages
+Disallow: /dashboard
+Disallow: /cases
+Disallow: /evidence
+Disallow: /analytics
+Disallow: /admin
+Disallow: /api/
+
+Sitemap: https://justiceai-rgpg.onrender.com/sitemap.xml
