@@ -202,7 +202,7 @@ export default function CaseDetailPage() {
           </div>
 
           {/* Sub-module quick links */}
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-3 gap-3 sm:gap-4">
             {[
               { to: `/cases/${id}/evidence`,   icon: Archive,     color: 'text-purple-400', bg: 'bg-purple-500/10', label: 'Evidence',  count: caseData.evidence_count ?? 0 },
               { to: `/cases/${id}/witnesses`,  icon: Users,       color: 'text-blue-400',   bg: 'bg-blue-500/10',   label: 'Witnesses', count: caseData.witness_count  ?? 0 },

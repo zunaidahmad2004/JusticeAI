@@ -152,7 +152,7 @@ export default function AppLayout() {
           </div>
 
           {/* Global Search */}
-          <div className="flex-1 max-w-xl mx-auto">
+          <div className="flex-1 max-w-xl mx-auto hidden sm:block">
             <button
               onClick={() => { setSearchOpen(true); setTimeout(() => searchRef.current?.focus(), 50); }}
               className="w-full flex items-center gap-3 px-3 py-2 bg-[#1A2332] border border-[#1E293B]
@@ -160,13 +160,20 @@ export default function AppLayout() {
                          hover:bg-[#1E293B] transition-all duration-200 group"
             >
               <Search className="w-4 h-4 group-hover:text-primary-400 transition-colors" />
-              <span className="flex-1 text-left">Search cases, FIRs, persons, evidence...</span>
+              <span className="flex-1 text-left truncate">Search cases, FIRs, persons, evidence...</span>
               <kbd className="hidden sm:flex items-center gap-1 px-2 py-0.5 bg-[#0F172A] border border-[#334155]
                               rounded-lg text-xs text-slate-600 font-mono">
                 Ctrl K
               </kbd>
             </button>
           </div>
+          {/* Mobile search icon only */}
+          <button
+            onClick={() => { setSearchOpen(true); setTimeout(() => searchRef.current?.focus(), 50); }}
+            className="btn-icon sm:hidden"
+          >
+            <Search className="w-4 h-4" />
+          </button>
 
           {/* Right actions */}
           <div className="flex items-center gap-2 flex-shrink-0">
@@ -327,7 +334,7 @@ export default function AppLayout() {
 
         {/* ── Page Content ─────────────────────────────────────────────────── */}
         <main className="flex-1 overflow-y-auto scroll-area">
-          <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 py-6">
+          <div className="max-w-screen-2xl mx-auto px-3 sm:px-4 md:px-6 py-4 sm:py-6">
             <Outlet />
           </div>
         </main>

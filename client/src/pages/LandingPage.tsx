@@ -120,7 +120,7 @@ export default function LandingPage() {
         style={{ backgroundColor: headerBg as any }}
         className="fixed top-0 left-0 right-0 z-50 backdrop-blur-lg border-b border-base-border/50"
       >
-        <div className="max-w-7xl mx-auto px-6 lg:px-8 py-4">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
 
             <button onClick={() => scrollTo('#home')} className="flex items-center gap-3 group">
@@ -202,21 +202,21 @@ export default function LandingPage() {
           className="absolute top-1/4 left-1/4 w-96 h-96 bg-navy-600/20 rounded-full blur-3xl" />
         <motion.div animate={{ scale:[1.2,1,1.2], opacity:[0.2,0.4,0.2] }} transition={{ duration:10, repeat:Infinity }}
           className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-blue-600/20 rounded-full blur-3xl" />
-        <div className="relative z-10 max-w-7xl mx-auto px-6 lg:px-8 py-20">
-          <div className="grid lg:grid-cols-2 gap-16 items-center">
+        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
+          <div className="grid lg:grid-cols-2 gap-12 items-center">
             <motion.div initial="hidden" animate="visible" variants={stagger} className="text-center lg:text-left">
-              <motion.div variants={fadeInUp} className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-navy-500/10 border border-navy-500/20 mb-8">
+              <motion.div variants={fadeInUp} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-navy-500/10 border border-navy-500/20 mb-6">
                 <Sparkles className="w-4 h-4 text-navy-400" />
-                <span className="text-sm font-semibold text-navy-400">Powered by Advanced AI</span>
+                <span className="text-xs sm:text-sm font-semibold text-navy-400">Powered by Advanced AI</span>
               </motion.div>
-              <motion.h1 variants={fadeInUp} className="text-5xl lg:text-6xl font-bold leading-tight mb-6">
+              <motion.h1 variants={fadeInUp} className="text-3xl sm:text-4xl lg:text-5xl xl:text-6xl font-bold leading-tight mb-4 sm:mb-6">
                 Helping Investigators.<br />
                 <span className="text-gradient-navy">Supporting Justice.</span>
               </motion.h1>
-              <motion.p variants={fadeInUp} className="text-xl text-slate-400 leading-relaxed mb-10 max-w-2xl">
+              <motion.p variants={fadeInUp} className="text-base sm:text-lg text-slate-400 leading-relaxed mb-7 sm:mb-10 max-w-2xl mx-auto lg:mx-0">
                 AI-powered criminal investigation platform for police departments, forensic teams and legal professionals.
               </motion.p>
-              <motion.div variants={fadeInUp} className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
+              <motion.div variants={fadeInUp} className="flex flex-col sm:flex-row gap-3 justify-center lg:justify-start">
                 <Link to="/register" className="btn-primary btn-lg group">
                   Start Investigation <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
                 </Link>
@@ -225,28 +225,29 @@ export default function LandingPage() {
                 </button>
               </motion.div>
             </motion.div>
-            <motion.div initial={{ opacity:0, x:60 }} animate={{ opacity:1, x:0 }} transition={{ duration:0.8, delay:0.3 }} className="relative">
-              <div className="glass-panel p-6">
+            <motion.div initial={{ opacity:0, x:60 }} animate={{ opacity:1, x:0 }} transition={{ duration:0.8, delay:0.3 }} className="relative mt-8 lg:mt-0">
+              <div className="glass-panel p-4 sm:p-6">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-sm font-bold text-white">Investigation Dashboard</h3>
                   <span className="badge-green text-2xs">Live</span>
                 </div>
                 <div className="grid grid-cols-2 gap-3 mb-4">
-                  <div className="glass-card p-3"><p className="text-2xs text-slate-500 mb-1">Active Cases</p><p className="text-2xl font-bold text-white">247</p></div>
-                  <div className="glass-card p-3"><p className="text-2xs text-slate-500 mb-1">AI Insights</p><p className="text-2xl font-bold text-navy-400">89</p></div>
+                  <div className="glass-card p-3"><p className="text-2xs text-slate-500 mb-1">Active Cases</p><p className="text-xl sm:text-2xl font-bold text-white">247</p></div>
+                  <div className="glass-card p-3"><p className="text-2xs text-slate-500 mb-1">AI Insights</p><p className="text-xl sm:text-2xl font-bold text-navy-400">89</p></div>
                 </div>
-                <div className="h-24 bg-base-elevated rounded-xl flex items-end gap-1 p-2">
+                <div className="h-20 sm:h-24 bg-base-elevated rounded-xl flex items-end gap-1 p-2">
                   {[40,65,45,80,60,90,70,85,75,95].map((h,i) => (
                     <motion.div key={i} initial={{ height:0 }} animate={{ height:`${h}%` }} transition={{ delay:0.5+i*0.1 }}
                       className="flex-1 bg-gradient-to-t from-navy-600 to-navy-400 rounded-sm" />
                   ))}
                 </div>
               </div>
-              <motion.div animate={{ y:[0,-10,0] }} transition={{ duration:3, repeat:Infinity }} className="absolute -top-6 -right-6 glass-card p-4 w-48">
+              {/* Floating cards — hidden on very small screens to prevent overflow */}
+              <motion.div animate={{ y:[0,-10,0] }} transition={{ duration:3, repeat:Infinity }} className="hidden sm:block absolute -top-6 -right-4 lg:-right-6 glass-card p-3 sm:p-4 w-40 sm:w-48">
                 <div className="flex items-center gap-2 mb-2"><CheckCircle className="w-4 h-4 text-green-400" /><span className="text-xs font-semibold text-white">Evidence Verified</span></div>
                 <p className="text-2xs text-slate-500">Forensic analysis complete</p>
               </motion.div>
-              <motion.div animate={{ y:[0,10,0] }} transition={{ duration:4, repeat:Infinity, delay:1 }} className="absolute -bottom-4 -left-4 glass-card p-4 w-44">
+              <motion.div animate={{ y:[0,10,0] }} transition={{ duration:4, repeat:Infinity, delay:1 }} className="hidden sm:block absolute -bottom-4 -left-2 lg:-left-4 glass-card p-3 sm:p-4 w-40 sm:w-44">
                 <div className="flex items-center gap-2 mb-2"><Sparkles className="w-4 h-4 text-navy-400" /><span className="text-xs font-semibold text-white">AI Recommendation</span></div>
                 <p className="text-2xs text-slate-500">3 new leads identified</p>
               </motion.div>
@@ -256,13 +257,13 @@ export default function LandingPage() {
       </section>
 
       {/* FEATURES */}
-      <section id="features" className="py-32 relative">
-        <div className="max-w-7xl mx-auto px-6 lg:px-8">
+      <section id="features" className="py-16 sm:py-24 lg:py-32 relative">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <motion.div initial="hidden" whileInView="visible" viewport={{ once:true }} variants={fadeInUp} className="text-center mb-16">
-            <h2 className="text-4xl font-bold text-white mb-4">Powerful Features</h2>
+            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-white mb-4">Powerful Features</h2>
             <p className="text-lg text-slate-400 max-w-2xl mx-auto">Enterprise-grade tools designed specifically for modern law enforcement workflows</p>
           </motion.div>
-          <motion.div initial="hidden" whileInView="visible" viewport={{ once:true }} variants={stagger} className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <motion.div initial="hidden" whileInView="visible" viewport={{ once:true }} variants={stagger} className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
             {[
               { icon: FileText,    color:'text-blue-400',   bg:'bg-blue-500/10',   title:'AI FIR Analysis',             desc:'Automatically extract entities, dates, locations, and applicable IPC sections from FIR text using advanced NLP.' },
               { icon: Archive,     color:'text-purple-400', bg:'bg-purple-500/10', title:'Evidence Management',         desc:'Secure digital chain of custody with tamper-proof audit trails, multi-user access control, and court-ready exhibit bundles.' },
@@ -287,10 +288,10 @@ export default function LandingPage() {
       </section>
 
       {/* WORKFLOW TIMELINE */}
-      <section className="py-32 bg-gradient-to-b from-transparent via-base-surface/50 to-transparent">
-        <div className="max-w-5xl mx-auto px-6 lg:px-8">
+      <section className="py-16 sm:py-24 lg:py-32 bg-gradient-to-b from-transparent via-base-surface/50 to-transparent">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
           <motion.div initial="hidden" whileInView="visible" viewport={{ once:true }} variants={fadeInUp} className="text-center mb-20">
-            <h2 className="text-4xl font-bold text-white mb-4">Investigation Workflow</h2>
+            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-white mb-4">Investigation Workflow</h2>
             <p className="text-lg text-slate-400">End-to-end case management powered by AI</p>
           </motion.div>
           <div className="space-y-12">
@@ -318,19 +319,19 @@ export default function LandingPage() {
       </section>
 
       {/* STATISTICS */}
-      <section className="py-32">
-        <div className="max-w-7xl mx-auto px-6 lg:px-8">
-          <motion.div initial="hidden" whileInView="visible" viewport={{ once:true }} variants={stagger} className="grid grid-cols-2 lg:grid-cols-4 gap-8">
+      <section className="py-16 sm:py-24 lg:py-32">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <motion.div initial="hidden" whileInView="visible" viewport={{ once:true }} variants={stagger} className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-8">
             {[
               { value:'120K+', label:'Cases Processed', icon:FileText  },
               { value:'98%',   label:'AI Accuracy',     icon:Zap       },
               { value:'15K+',  label:'Police Officers', icon:Users     },
               { value:'300+',  label:'Departments',     icon:Building2 },
             ].map((stat) => (
-              <motion.div key={stat.label} variants={fadeInUp} className="text-center glass-panel p-8 group hover:border-navy-500/30 transition-all">
-                <stat.icon className="w-8 h-8 text-navy-400 mx-auto mb-4 group-hover:scale-110 transition-transform" />
-                <p className="metric-xl text-gradient-navy mb-2">{stat.value}</p>
-                <p className="text-sm text-slate-500 font-semibold uppercase tracking-wider">{stat.label}</p>
+              <motion.div key={stat.label} variants={fadeInUp} className="text-center glass-panel p-5 sm:p-8 group hover:border-navy-500/30 transition-all">
+                <stat.icon className="w-6 h-6 sm:w-8 sm:h-8 text-navy-400 mx-auto mb-3 group-hover:scale-110 transition-transform" />
+                <p className="text-2xl sm:text-3xl font-bold text-gradient-navy mb-1 sm:mb-2">{stat.value}</p>
+                <p className="text-xs sm:text-sm text-slate-500 font-semibold uppercase tracking-wider">{stat.label}</p>
               </motion.div>
             ))}
           </motion.div>
@@ -338,19 +339,19 @@ export default function LandingPage() {
       </section>
 
       {/* SOLUTIONS */}
-      <section id="solutions" className="py-32 bg-gradient-to-b from-transparent via-base-surface/30 to-transparent">
-        <div className="max-w-7xl mx-auto px-6 lg:px-8">
+      <section id="solutions" className="py-16 sm:py-24 lg:py-32 bg-gradient-to-b from-transparent via-base-surface/30 to-transparent">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <motion.div initial="hidden" whileInView="visible" viewport={{ once:true }} variants={fadeInUp} className="text-center mb-16">
             <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-navy-500/10 border border-navy-500/20 mb-6">
               <Target className="w-4 h-4 text-navy-400" />
               <span className="text-sm font-semibold text-navy-400">Complete Investigation Suite</span>
             </span>
-            <h2 className="text-4xl font-bold text-white mb-4">End-to-End Solutions</h2>
+            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-white mb-4">End-to-End Solutions</h2>
             <p className="text-lg text-slate-400 max-w-3xl mx-auto">
               From the moment a crime is reported to the final chargesheet filing, JusticeAI covers every step of the investigation lifecycle with AI-powered precision.
             </p>
           </motion.div>
-          <motion.div initial="hidden" whileInView="visible" viewport={{ once:true }} variants={stagger} className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <motion.div initial="hidden" whileInView="visible" viewport={{ once:true }} variants={stagger} className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
             {SOLUTIONS.map((s) => (
               <motion.div key={s.title} variants={fadeInUp} whileHover={{ y:-6, transition:{ duration:0.2 } }}
                 className="glass-card-hover p-6 group relative overflow-hidden">
@@ -371,10 +372,10 @@ export default function LandingPage() {
       </section>
 
       {/* TESTIMONIALS */}
-      <section className="py-32">
-        <div className="max-w-7xl mx-auto px-6 lg:px-8">
+      <section className="py-16 sm:py-24 lg:py-32">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <motion.div initial="hidden" whileInView="visible" viewport={{ once:true }} variants={fadeInUp} className="text-center mb-16">
-            <h2 className="text-4xl font-bold text-white mb-4">Trusted by Professionals</h2>
+            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-white mb-4">Trusted by Professionals</h2>
             <p className="text-lg text-slate-400">Hear from the officers and prosecutors using JusticeAI every day</p>
           </motion.div>
           <motion.div initial="hidden" whileInView="visible" viewport={{ once:true }} variants={stagger} className="grid md:grid-cols-3 gap-8">
@@ -406,15 +407,15 @@ export default function LandingPage() {
       </section>
 
       {/* ABOUT */}
-      <section id="about" className="py-32 bg-gradient-to-b from-transparent via-base-surface/40 to-transparent">
-        <div className="max-w-7xl mx-auto px-6 lg:px-8">
+      <section id="about" className="py-16 sm:py-24 lg:py-32 bg-gradient-to-b from-transparent via-base-surface/40 to-transparent">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 
           <motion.div initial="hidden" whileInView="visible" viewport={{ once:true }} variants={fadeInUp} className="text-center mb-20">
             <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-navy-500/10 border border-navy-500/20 mb-6">
               <Award className="w-4 h-4 text-navy-400" />
               <span className="text-sm font-semibold text-navy-400">About JusticeAI</span>
             </span>
-            <h2 className="text-4xl font-bold text-white mb-4">Built for Those Who Protect Justice</h2>
+            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-white mb-4">Built for Those Who Protect Justice</h2>
             <p className="text-lg text-slate-400 max-w-3xl mx-auto leading-relaxed">
               JusticeAI was founded by a coalition of former IPS officers, forensic scientists, and AI researchers who experienced firsthand how outdated investigation tools slowed justice delivery across India.
             </p>
@@ -510,21 +511,21 @@ export default function LandingPage() {
       </section>
 
       {/* CONTACT */}
-      <section id="contact" className="py-32">
-        <div className="max-w-7xl mx-auto px-6 lg:px-8">
+      <section id="contact" className="py-16 sm:py-24 lg:py-32">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 
           <motion.div initial="hidden" whileInView="visible" viewport={{ once:true }} variants={fadeInUp} className="text-center mb-16">
             <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-navy-500/10 border border-navy-500/20 mb-6">
               <Mail className="w-4 h-4 text-navy-400" />
               <span className="text-sm font-semibold text-navy-400">Get in Touch</span>
             </span>
-            <h2 className="text-4xl font-bold text-white mb-4">Contact Us</h2>
+            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-white mb-4">Contact Us</h2>
             <p className="text-lg text-slate-400 max-w-2xl mx-auto">
               Request a live demonstration, ask about enterprise deployment, or speak with our team about your department's investigation needs.
             </p>
           </motion.div>
 
-          <div className="grid lg:grid-cols-5 gap-8">
+          <div className="grid lg:grid-cols-5 gap-6 sm:gap-8">
 
             <motion.div initial="hidden" whileInView="visible" viewport={{ once:true }} variants={stagger} className="lg:col-span-2 space-y-4">
               {CONTACT_INFO.map((c) => (
@@ -621,8 +622,8 @@ export default function LandingPage() {
 
       {/* FOOTER */}
       <footer className="border-t border-base-border bg-base-surface/50 py-16">
-        <div className="max-w-7xl mx-auto px-6 lg:px-8">
-          <div className="grid md:grid-cols-4 gap-12 mb-12">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 sm:gap-12 mb-12">
             <div className="md:col-span-2">
               <div className="flex items-center gap-3 mb-4">
                 <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-navy-600 to-navy-500 flex items-center justify-center shadow-glow-sm">

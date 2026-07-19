@@ -444,3 +444,39 @@
   .alert-success { @apply border-l-4 border-green-500; }
   .alert-warning { @apply border-l-4 border-yellow-500; }
   .alert-error   { @apply border-l-4 border-red-500; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   MOBILE RESPONSIVE UTILITIES
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Prevent horizontal overflow on all pages */
+html, body {
+  overflow-x: hidden;
+  max-width: 100vw;
+}
+
+/* Smooth scrolling on iOS */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Touch-friendly tap targets */
+button, a, [role="button"] {
+  min-height: 36px;
+}
+
+/* Mobile-safe table scroll */
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Mobile btn-lg less padding on small screens */
+@media (max-width: 480px) {
+  .btn-lg {
+    @apply px-5 py-3 text-sm;
+  }
+  .feature-card {
+    @apply p-5;
+  }
+}

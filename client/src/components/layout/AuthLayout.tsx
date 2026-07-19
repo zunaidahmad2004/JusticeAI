@@ -241,7 +241,7 @@ export default function AuthLayout() {
       {/* ════════════════════════════════════════════════════════════════════
           RIGHT FORM PANEL
           ════════════════════════════════════════════════════════════════════ */}
-      <div className="flex-1 flex items-center justify-center p-8 lg:p-12 bg-base-bg">
+      <div className="flex-1 flex items-center justify-center p-5 sm:p-8 lg:p-12 bg-base-bg min-h-screen lg:min-h-0">
         <div className="w-full max-w-md">
           {/* Mobile Logo (hidden on desktop) */}
           <div className="flex items-center gap-3 mb-10 lg:hidden">
