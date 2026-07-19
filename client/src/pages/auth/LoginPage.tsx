@@ -70,11 +70,11 @@ export default function LoginPage() {
 
         {/* Email */}
         <div>
-          <label htmlFor="email" className="input-label">Email Address</label>
+          <label htmlFor="login-email" className="input-label">Email Address</label>
           <div className="relative">
-            <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600 pointer-events-none" />
+            <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600 pointer-events-none z-10" />
             <input
-              id="email"
+              id="login-email"
               type="email"
               autoComplete="email"
               placeholder="officer@department.gov"
@@ -102,7 +102,7 @@ export default function LoginPage() {
         {/* Password */}
         <div>
           <div className="flex items-center justify-between mb-2">
-            <label htmlFor="password" className="input-label mb-0">Password</label>
+            <label htmlFor="login-password" className="input-label mb-0">Password</label>
             <Link
               to="/forgot-password"
               className="text-xs text-primary-400 hover:text-primary-300 transition-colors font-medium"
@@ -111,9 +111,9 @@ export default function LoginPage() {
             </Link>
           </div>
           <div className="relative">
-            <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600 pointer-events-none" />
+            <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600 pointer-events-none z-10" />
             <input
-              id="password"
+              id="login-password"
               type={showPassword ? 'text' : 'password'}
               autoComplete="current-password"
               placeholder="••••••••"
@@ -126,7 +126,7 @@ export default function LoginPage() {
             <button
               type="button"
               onClick={() => setShowPassword(s => !s)}
-              className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-600 hover:text-slate-300 transition-colors bg-transparent border-none p-0"
+              className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-600 hover:text-slate-300 transition-colors bg-transparent border-none p-0 z-10"
               aria-label={showPassword ? 'Hide password' : 'Show password'}
             >
               {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -190,19 +190,6 @@ export default function LoginPage() {
         <p className="text-xs text-slate-600 leading-relaxed text-center">
           <span className="text-primary-400 font-semibold">🔒 Authorized personnel only.</span>
           {' '}All access is logged and monitored.
-        </p>
-      </div>
-
-      {/* Demo credentials */}
-      <div
-        className="mt-3 rounded-xl p-3"
-        style={{ background: 'rgba(34,197,94,0.04)', border: '1px solid rgba(34,197,94,0.1)' }}
-      >
-        <p className="text-[11px] text-slate-600 text-center">
-          Demo:{' '}
-          <span className="text-green-400 font-mono">admin@justiceai.com</span>
-          {' / '}
-          <span className="text-green-400 font-mono">Admin@2024</span>
         </p>
       </div>
     </motion.div>
