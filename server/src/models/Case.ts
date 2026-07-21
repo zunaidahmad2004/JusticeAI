@@ -100,5 +100,14 @@ CaseSchema.index({ status: 1 });
 CaseSchema.index({ priority: 1 });
 CaseSchema.index({ assigned_io: 1 });
 CaseSchema.index({ latitude: 1, longitude: 1 });
+// Compound indexes for dashboard filter patterns (non-admin user queries)
+CaseSchema.index({ assigned_io: 1,   status: 1, updatedAt: -1 });
+CaseSchema.index({ assigned_sho: 1,  status: 1, updatedAt: -1 });
+CaseSchema.index({ prosecutor_id: 1, status: 1, updatedAt: -1 });
+CaseSchema.index({ created_by: 1,    status: 1, updatedAt: -1 });
+// Weekly chart aggregation — date range scans
+CaseSchema.index({ createdAt: -1 });
+CaseSchema.index({ status: 1, updatedAt: -1 });
+CaseSchema.index({ priority: 1, status: 1 });                  // priority filter + status
 
 export default mongoose.model<ICase>('Case', CaseSchema);

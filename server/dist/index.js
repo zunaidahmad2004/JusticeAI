@@ -763,6 +763,17 @@ var TrustedDevice_default = import_mongoose6.default.model("TrustedDevice", Trus
 
 // src/middleware/auth.ts
 var import_jsonwebtoken2 = __toESM(require("jsonwebtoken"));
+var AUTH_CACHE = /* @__PURE__ */ new Map();
+var CACHE_TTL_MS = 5 * 60 * 1e3;
+var MAX_CACHE_SIZE = 500;
+function pruneCache() {
+  if (AUTH_CACHE.size <= MAX_CACHE_SIZE) return;
+  const now = Date.now();
+  for (const [key, entry] of AUTH_CACHE.entries()) {
+    if (entry.expiresAt < now) AUTH_CACHE.delete(key);
+    if (AUTH_CACHE.size <= MAX_CACHE_SIZE) break;
+  }
+}
 var authenticate = async (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
@@ -770,14 +781,30 @@ var authenticate = async (req, res, next) => {
       res.status(401).json({ error: "No token provided" });
       return;
     }
-    const token = authHeader.split(" ")[1];
-    const decoded = import_jsonwebtoken2.default.verify(token, process.env.JWT_SECRET || "fallback_secret");
-    const user = await User_default.findOne({ _id: decoded.id, is_active: true }).select("id email role full_name is_active");
+    const token = authHeader.slice(7);
+    const cached = AUTH_CACHE.get(token);
+    if (cached && cached.expiresAt > Date.now()) {
+      req.user = cached.user;
+      return next();
+    }
+    const decoded = import_jsonwebtoken2.default.verify(
+      token,
+      process.env.JWT_SECRET || "fallback_secret"
+    );
+    const user = await User_default.findOne({ _id: decoded.id, is_active: true }).select("_id email role full_name").lean();
     if (!user) {
       res.status(401).json({ error: "User not found or inactive" });
       return;
     }
-    req.user = { id: String(user._id), email: user.email, role: user.role, full_name: user.full_name };
+    const authUser = {
+      id: String(user._id),
+      email: user.email,
+      role: user.role,
+      full_name: user.full_name
+    };
+    pruneCache();
+    AUTH_CACHE.set(token, { user: authUser, expiresAt: Date.now() + CACHE_TTL_MS });
+    req.user = authUser;
     next();
   } catch {
     res.status(401).json({ error: "Invalid or expired token" });
@@ -1464,6 +1491,13 @@ CaseSchema.index({ status: 1 });
 CaseSchema.index({ priority: 1 });
 CaseSchema.index({ assigned_io: 1 });
 CaseSchema.index({ latitude: 1, longitude: 1 });
+CaseSchema.index({ assigned_io: 1, status: 1, updatedAt: -1 });
+CaseSchema.index({ assigned_sho: 1, status: 1, updatedAt: -1 });
+CaseSchema.index({ prosecutor_id: 1, status: 1, updatedAt: -1 });
+CaseSchema.index({ created_by: 1, status: 1, updatedAt: -1 });
+CaseSchema.index({ createdAt: -1 });
+CaseSchema.index({ status: 1, updatedAt: -1 });
+CaseSchema.index({ priority: 1, status: 1 });
 var Case_default = import_mongoose7.default.model("Case", CaseSchema);
 
 // src/models/Evidence.ts
@@ -1504,6 +1538,10 @@ var EvidenceSchema = new import_mongoose8.Schema(
   { timestamps: true }
 );
 EvidenceSchema.index({ case_id: 1 });
+EvidenceSchema.index({ is_verified: 1 });
+EvidenceSchema.index({ case_id: 1, is_verified: 1 });
+EvidenceSchema.index({ case_id: 1, evidence_type: 1 });
+EvidenceSchema.index({ case_id: 1, createdAt: -1 });
 var Evidence_default = import_mongoose8.default.model("Evidence", EvidenceSchema);
 
 // src/models/Witness.ts
@@ -3736,77 +3774,115 @@ var Notification_default = import_mongoose25.default.model("Notification", Notif
 var router10 = (0, import_express10.Router)();
 router10.use(authenticate);
 router10.get("/", async (req, res) => {
-  const userId = req.user.id;
-  const isAdmin = ["admin", "super_admin"].includes(req.user.role);
-  const caseFilter = {};
-  if (!isAdmin) {
-    caseFilter.$or = [
-      { assigned_io: userId },
-      { assigned_sho: userId },
-      { prosecutor_id: userId },
-      { created_by: userId }
-    ];
-  }
-  const [
-    totalCases,
-    openCases,
-    casesByStatus,
-    recentCases,
-    totalWitnesses,
-    totalSuspects,
-    unverifiedEvidence,
-    recentNotifications
-  ] = await Promise.all([
-    Case_default.countDocuments(caseFilter),
-    Case_default.countDocuments({ ...caseFilter, status: "open" }),
-    Case_default.aggregate([
-      { $match: caseFilter },
-      { $group: { _id: "$status", count: { $sum: 1 } } }
-    ]),
-    Case_default.find(caseFilter).populate("assigned_io", "full_name").sort({ updatedAt: -1 }).limit(5).lean(),
-    Witness_default.countDocuments(isAdmin ? {} : { case_id: { $in: await Case_default.distinct("_id", caseFilter) } }),
-    Suspect_default.countDocuments(isAdmin ? {} : { case_id: { $in: await Case_default.distinct("_id", caseFilter) } }),
-    Evidence_default.countDocuments({ is_verified: false }),
-    Notification_default.find({ user_id: userId }).sort({ createdAt: -1 }).limit(5).lean()
-  ]);
-  const statusMap = {};
-  casesByStatus.forEach((s) => {
-    statusMap[s._id] = s.count;
-  });
-  res.json({
-    stats: {
-      total_cases: totalCases,
-      open_cases: openCases,
-      total_witnesses: totalWitnesses,
-      total_suspects: totalSuspects,
-      unverified_evidence: unverifiedEvidence
-    },
-    cases_by_status: statusMap,
-    recent_cases: recentCases.map((c) => ({
-      ...c,
-      id: c._id,
-      io_name: c.assigned_io?.full_name
-    })),
-    recent_notifications: recentNotifications.map((n) => ({ ...n, id: n._id })),
-    weekly_chart: await getWeeklyChart(caseFilter)
-  });
-});
-async function getWeeklyChart(caseFilter) {
-  const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  const result = [];
-  for (let i = 6; i >= 0; i--) {
-    const start2 = /* @__PURE__ */ new Date();
-    start2.setHours(0, 0, 0, 0);
-    start2.setDate(start2.getDate() - i);
-    const end = new Date(start2);
-    end.setHours(23, 59, 59, 999);
-    const [filings, resolved] = await Promise.all([
-      Case_default.countDocuments({ ...caseFilter, createdAt: { $gte: start2, $lte: end } }),
-      Case_default.countDocuments({ ...caseFilter, status: { $in: ["closed", "chargesheet_filed"] }, updatedAt: { $gte: start2, $lte: end } })
+  try {
+    const userId = req.user.id;
+    const isAdmin = ["admin", "super_admin"].includes(req.user.role);
+    const caseFilter = {};
+    if (!isAdmin) {
+      caseFilter.$or = [
+        { assigned_io: userId },
+        { assigned_sho: userId },
+        { prosecutor_id: userId },
+        { created_by: userId }
+      ];
+    }
+    let accessibleCaseIds = null;
+    const getCaseIds = async () => {
+      if (isAdmin) return null;
+      if (accessibleCaseIds === null) {
+        accessibleCaseIds = await Case_default.distinct("_id", caseFilter);
+      }
+      return accessibleCaseIds;
+    };
+    const [
+      totalCases,
+      openCases,
+      casesByStatus,
+      recentCases,
+      unverifiedEvidence,
+      recentNotifications,
+      weeklyChart
+    ] = await Promise.all([
+      Case_default.countDocuments(caseFilter),
+      Case_default.countDocuments({ ...caseFilter, status: "open" }),
+      Case_default.aggregate([
+        { $match: caseFilter },
+        { $group: { _id: "$status", count: { $sum: 1 } } }
+      ]),
+      Case_default.find(caseFilter).select("case_number title status priority crime_type updatedAt assigned_io").populate("assigned_io", "full_name").sort({ updatedAt: -1 }).limit(5).lean(),
+      // Uses the {is_verified:1} index we add in the model
+      Evidence_default.countDocuments({ is_verified: false }),
+      Notification_default.find({ user_id: userId }).select("title message type is_read createdAt").sort({ createdAt: -1 }).limit(5).lean(),
+      // Single aggregation replaces 14 countDocuments calls
+      getWeeklyChartAgg(caseFilter)
     ]);
-    result.push({ name: days[start2.getDay()], filings, resolved });
+    const caseIds = await getCaseIds();
+    const subFilter = isAdmin ? {} : { case_id: { $in: caseIds } };
+    const [totalWitnesses, totalSuspects] = await Promise.all([
+      Witness_default.countDocuments(subFilter),
+      Suspect_default.countDocuments(subFilter)
+    ]);
+    const statusMap = {};
+    casesByStatus.forEach((s) => {
+      statusMap[s._id] = s.count;
+    });
+    res.json({
+      stats: {
+        total_cases: totalCases,
+        open_cases: openCases,
+        total_witnesses: totalWitnesses,
+        total_suspects: totalSuspects,
+        unverified_evidence: unverifiedEvidence
+      },
+      cases_by_status: statusMap,
+      recent_cases: recentCases.map((c) => ({
+        ...c,
+        id: c._id,
+        io_name: c.assigned_io?.full_name
+      })),
+      recent_notifications: recentNotifications.map((n) => ({ ...n, id: n._id })),
+      weekly_chart: weeklyChart
+    });
+  } catch (err) {
+    console.error("Dashboard error:", err);
+    res.status(500).json({ error: "Failed to load dashboard data" });
   }
-  return result;
+});
+async function getWeeklyChartAgg(caseFilter) {
+  const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const since = /* @__PURE__ */ new Date();
+  since.setDate(since.getDate() - 6);
+  since.setHours(0, 0, 0, 0);
+  const [filingsRaw, resolvedRaw] = await Promise.all([
+    // New cases per day-of-week in the last 7 days
+    Case_default.aggregate([
+      { $match: { ...caseFilter, createdAt: { $gte: since } } },
+      { $group: { _id: { $dayOfWeek: "$createdAt" }, count: { $sum: 1 } } }
+    ]),
+    // Closed/filed cases per day-of-week in the last 7 days
+    Case_default.aggregate([
+      { $match: { ...caseFilter, status: { $in: ["closed", "chargesheet_filed"] }, updatedAt: { $gte: since } } },
+      { $group: { _id: { $dayOfWeek: "$updatedAt" }, count: { $sum: 1 } } }
+    ])
+  ]);
+  const filingsMap = {};
+  const resolvedMap = {};
+  filingsRaw.forEach((b) => {
+    filingsMap[b._id] = b.count;
+  });
+  resolvedRaw.forEach((b) => {
+    resolvedMap[b._id] = b.count;
+  });
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(since);
+    d.setDate(d.getDate() + i);
+    const dow = d.getDay() + 1;
+    return {
+      name: days[d.getDay()],
+      filings: filingsMap[dow] ?? 0,
+      resolved: resolvedMap[dow] ?? 0
+    };
+  });
 }
 var dashboard_default = router10;
 
@@ -4856,18 +4932,6 @@ app.get("/api/health", (_req, res) => {
     timestamp: (/* @__PURE__ */ new Date()).toISOString(),
     database: "mongodb",
     ai: getAIStatus()
-  });
-});
-app.get("/api/ai-debug", (_req, res) => {
-  const apiKey = process.env.GEMINI_API_KEY || "";
-  const b64 = process.env.GEMINI_CREDENTIALS_B64 || "";
-  res.json({
-    GEMINI_API_KEY_length: apiKey.length,
-    GEMINI_API_KEY_prefix: apiKey.substring(0, 8),
-    GEMINI_CREDENTIALS_B64_length: b64.length,
-    GEMINI_CREDENTIALS_B64_prefix: b64.substring(0, 20),
-    cwd: process.cwd(),
-    ai_status: getAIStatus()
   });
 });
 app.use("/api/auth", auth_default);

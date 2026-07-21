@@ -68,5 +68,9 @@ const EvidenceSchema = new Schema<IEvidence>(
 );
 
 EvidenceSchema.index({ case_id: 1 });
+EvidenceSchema.index({ is_verified: 1 });                    // dashboard unverified count
+EvidenceSchema.index({ case_id: 1, is_verified: 1 });        // case-scoped unverified
+EvidenceSchema.index({ case_id: 1, evidence_type: 1 });      // type filter per case
+EvidenceSchema.index({ case_id: 1, createdAt: -1 });         // recent evidence per case
 
 export default mongoose.model<IEvidence>('Evidence', EvidenceSchema);
