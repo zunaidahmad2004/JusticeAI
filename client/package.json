@@ -6,7 +6,7 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "vite build --logLevel info",
+    "build": "vite build --logLevel info --emptyOutDir",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -24,7 +24,7 @@
     "framer-motion": "^12.42.2",
     "leaflet": "^1.9.4",
     "leaflet.markercluster": "^1.5.3",
-    "lucide-react": "^1.23.0",
+    "lucide-react": "^1.57.0",
     "postcss": "^8.4.32",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
