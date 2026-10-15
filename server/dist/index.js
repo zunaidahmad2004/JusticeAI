@@ -5052,6 +5052,15 @@ app.get("/api/health", (_req, res) => {
     ai: getAIStatus()
   });
 });
+app.get("/api/debug/env", (_req, res) => {
+  res.json({
+    GEMINI_MODEL: process.env.GEMINI_MODEL || "NOT_SET",
+    GEMINI_API_KEY_EXISTS: !!process.env.GEMINI_API_KEY,
+    GEMINI_CREDENTIALS_B64_EXISTS: !!process.env.GEMINI_CREDENTIALS_B64,
+    NODE_ENV: process.env.NODE_ENV || "NOT_SET",
+    ai_status: getAIStatus()
+  });
+});
 app.use("/api/auth", auth_default);
 app.use("/api/cases", cases_default);
 app.use("/api/evidence", evidence_default);
