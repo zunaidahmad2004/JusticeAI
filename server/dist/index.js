@@ -147,7 +147,10 @@ var import_fs = __toESM(require("fs"));
 var import_path = __toESM(require("path"));
 var import_crypto = __toESM(require("crypto"));
 var GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-1.5-flash";
+var GEMINI_FALLBACK = process.env.GEMINI_FALLBACK_MODEL || "gemini-flash-lite-latest";
 var GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta";
+var MAX_RETRIES = 3;
+var INITIAL_RETRY_DELAY = 1e3;
 var _auth = null;
 function resolveAuth() {
   if (_auth) return _auth;
@@ -267,51 +270,97 @@ async function getServiceAccountToken(credPath) {
   _tokenCache = { token: data.access_token, expiresAt: Date.now() + data.expires_in * 1e3 };
   return _tokenCache.token;
 }
-async function buildRequest(endpoint, stream = false) {
+async function buildRequest(endpoint, stream = false, model) {
   const auth = resolveAuth();
+  const modelToUse = model || GEMINI_MODEL;
   const suffix = stream ? ":streamGenerateContent?alt=sse" : ":generateContent";
   const headers = { "Content-Type": "application/json" };
   if (auth.mode === "api_key") {
     const sep = stream ? "&" : "?";
-    const url = `${GEMINI_BASE}/models/${GEMINI_MODEL}${suffix}${stream ? "" : "?key=" + auth.apiKey}`;
+    const url = `${GEMINI_BASE}/models/${modelToUse}${suffix}${stream ? "" : "?key=" + auth.apiKey}`;
     return {
-      url: stream ? `${GEMINI_BASE}/models/${GEMINI_MODEL}:streamGenerateContent?key=${auth.apiKey}&alt=sse` : `${GEMINI_BASE}/models/${GEMINI_MODEL}:generateContent?key=${auth.apiKey}`,
+      url: stream ? `${GEMINI_BASE}/models/${modelToUse}:streamGenerateContent?key=${auth.apiKey}&alt=sse` : `${GEMINI_BASE}/models/${modelToUse}:generateContent?key=${auth.apiKey}`,
       headers
     };
   }
   const token = await getServiceAccountToken(auth.credPath);
   headers["Authorization"] = `Bearer ${token}`;
   return {
-    url: stream ? `${GEMINI_BASE}/models/${GEMINI_MODEL}:streamGenerateContent?alt=sse` : `${GEMINI_BASE}/models/${GEMINI_MODEL}:generateContent`,
+    url: stream ? `${GEMINI_BASE}/models/${modelToUse}:streamGenerateContent?alt=sse` : `${GEMINI_BASE}/models/${modelToUse}:generateContent`,
     headers
   };
 }
 async function callGemini(contents, config) {
-  const { url, headers } = await buildRequest("", false);
-  const body3 = {
-    contents,
-    generationConfig: {
-      temperature: config?.temperature ?? 0.4,
-      maxOutputTokens: config?.maxOutputTokens ?? 8192,
-      topP: config?.topP ?? 0.9
+  let lastError = null;
+  let modelToUse = GEMINI_MODEL;
+  for (const model of [GEMINI_MODEL, GEMINI_FALLBACK]) {
+    modelToUse = model;
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        const { url, headers } = await buildRequest("", false, modelToUse);
+        const body3 = {
+          contents,
+          generationConfig: {
+            temperature: config?.temperature ?? 0.4,
+            maxOutputTokens: config?.maxOutputTokens ?? 8192,
+            topP: config?.topP ?? 0.9
+          }
+        };
+        const resp = await fetch(url, {
+          method: "POST",
+          headers,
+          body: JSON.stringify(body3),
+          signal: AbortSignal.timeout(3e4)
+          // 30s timeout
+        });
+        if (!resp.ok) {
+          const errText = await resp.text();
+          if (resp.status === 401 || resp.status === 403) {
+            _auth = null;
+            _tokenCache = null;
+            throw new Error(
+              `Gemini API authentication failed (${resp.status}): ${errText.substring(0, 200)}. Check that your GEMINI_API_KEY is valid and not expired.`
+            );
+          }
+          if (resp.status === 503 || resp.status === 429) {
+            lastError = new Error(`Gemini API ${resp.status === 503 ? "service unavailable" : "quota exceeded"} (${resp.status}): ${errText.substring(0, 200)}`);
+            if (attempt < MAX_RETRIES) {
+              const delay = INITIAL_RETRY_DELAY * Math.pow(2, attempt) + Math.random() * 1e3;
+              logger.warn(`Gemini API ${resp.status} for ${modelToUse}, retrying in ${Math.round(delay)}ms (attempt ${attempt + 1}/${MAX_RETRIES})`);
+              await new Promise((resolve) => setTimeout(resolve, delay));
+              continue;
+            }
+            if (model === GEMINI_MODEL && GEMINI_FALLBACK !== GEMINI_MODEL) {
+              logger.warn(`Primary model ${GEMINI_MODEL} failed after ${MAX_RETRIES} retries, trying fallback ${GEMINI_FALLBACK}`);
+              break;
+            }
+            throw lastError;
+          }
+          throw new Error(`Gemini API error ${resp.status}: ${errText.substring(0, 300)}`);
+        }
+        const data = await resp.json();
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+        if (!text) throw new Error("Gemini returned empty response");
+        if (model !== GEMINI_MODEL) {
+          logger.info(`Used fallback model ${model} successfully`);
+        }
+        return text;
+      } catch (err) {
+        if (err instanceof Error && err.name === "AbortError") {
+          lastError = new Error(`Gemini API request timeout after 30s`);
+          if (attempt < MAX_RETRIES) {
+            const delay = INITIAL_RETRY_DELAY * Math.pow(2, attempt);
+            logger.warn(`Request timeout for ${modelToUse}, retrying in ${delay}ms`);
+            await new Promise((resolve) => setTimeout(resolve, delay));
+            continue;
+          }
+        } else {
+          throw err;
+        }
+      }
     }
-  };
-  const resp = await fetch(url, { method: "POST", headers, body: JSON.stringify(body3) });
-  if (!resp.ok) {
-    const errText = await resp.text();
-    if (resp.status === 401 || resp.status === 403) {
-      _auth = null;
-      _tokenCache = null;
-      throw new Error(
-        `Gemini API authentication failed (${resp.status}): ${errText.substring(0, 200)}. Check that your GEMINI_API_KEY is valid and not expired.`
-      );
-    }
-    throw new Error(`Gemini API error ${resp.status}: ${errText.substring(0, 300)}`);
   }
-  const data = await resp.json();
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-  if (!text) throw new Error("Gemini returned empty response");
-  return text;
+  throw lastError || new Error("Failed to generate response after all retries");
 }
 async function callGeminiStream(contents, onChunk) {
   const { url, headers } = await buildRequest("", true);
@@ -3635,68 +3684,20 @@ router9.post("/chat", async (req, res) => {
         ].filter(Boolean).join("\n");
       }
     }
-    const systemPrompt = `You are JusticeAI \u2014 an elite AI assistant for criminal investigators, forensic experts, public prosecutors, and legal professionals in India.
+    const systemPrompt = `You are JusticeAI \u2014 an expert AI assistant for criminal investigators, prosecutors, and legal professionals in India.
 
-## Your Identity
-You think and reason like a combination of:
-- A 20-year experienced IPS officer who has handled homicide, cyber crime, financial fraud, narcotics, and terrorism cases
-- A senior criminal lawyer who knows IPC/BNS, CrPC/BNSS, Indian Evidence Act/BSA, IT Act, POCSO, and NDPS Act deeply
-- A forensic science expert with experience in digital forensics, DNA analysis, ballistics, and document examination
+You combine the expertise of a senior IPS officer, criminal lawyer, and forensic scientist. You're deeply familiar with BNS 2023, BNSS 2023, BSA 2023, IT Act, POCSO, NDPS, and Indian criminal law.
 
-## Core Principles
-1. **Think before answering.** Internally analyze the question from every angle before writing your response.
-2. **Complete answers only.** Never stop mid-thought. Cover the topic fully. If the answer is long, continue until done.
-3. **Context-aware.** You remember everything said in this conversation. Use prior context naturally.
-4. **Accurate over fast.** Prefer factual accuracy. If uncertain, say so clearly instead of guessing.
-5. **No hallucination.** If you do not know something, say: "I don't have enough information to conclude this with certainty."
-6. **Structured responses.** Use Markdown: headings, bullet lists, numbered steps, bold for key terms, tables where useful.
+**Response style:**
+- Concise and conversational like ChatGPT \u2014 default to 2-5 short sentences for simple questions
+- For complex investigations, use structured analysis with headings only when truly needed
+- Natural and direct \u2014 no robotic templates
+- Explain the "why" behind recommendations
+- If uncertain, say so clearly
 
-## Response Style
-- Natural, intelligent, and professional \u2014 like a trusted senior colleague explaining something clearly
-- Not robotic. Not template-based. Each answer is crafted for the specific question asked.
-- Analytical: explain the *why* behind every recommendation
-- For complex questions: cover multiple angles, scenarios, risks, and next steps
+**For investigations, consider:** Evidence (physical, digital, forensic), timeline, motive, opportunity, suspects, witnesses, digital trails (CDR, CCTV, metadata), legal gaps, and next steps.
 
-## Investigation Analysis Framework
-When analyzing any investigative scenario, consider:
-- **Evidence**: physical, digital, forensic, documentary
-- **Timeline**: reconstruct sequence of events
-- **Motive**: who benefits, who had reason
-- **Opportunity**: who had access, when and where
-- **Suspects**: profile, alibi, prior history
-- **Witnesses**: reliability, corroboration
-- **Digital trail**: CDR, CCTV, metadata, social media, IP logs
-- **Legal gaps**: what is missing that would weaken prosecution
-- **Risks**: what could go wrong in investigation or court
-- **Next steps**: practical, prioritized action items
-
-## For Complex Investigation Questions, Structure as:
-### Summary
-### Detailed Analysis  
-### Possible Scenarios
-### Required Evidence
-### Applicable Legal Provisions (BNS/BNSS/BSA/IT Act/POCSO/NDPS)
-### Recommended Next Steps
-### Important Precautions
-### Conclusion
-
-## Indian Law Expertise
-You are deeply familiar with:
-- **BNS 2023** (Bharatiya Nyaya Sanhita) \u2014 replaced IPC
-- **BNSS 2023** (Bharatiya Nagarik Suraksha Sanhita) \u2014 replaced CrPC
-- **BSA 2023** (Bharatiya Sakshya Adhiniyam) \u2014 replaced Indian Evidence Act
-- **IT Act 2000** and amendments
-- **POCSO Act 2012**
-- **NDPS Act 1985**
-- **Prevention of Corruption Act 1988**
-- **Prevention of Money Laundering Act 2002**
-- Supreme Court and High Court landmark judgments
-- NCRB investigation standards and procedures
-
-## Important Disclaimers
-- Legal recommendations are advisory only \u2014 must be verified by a qualified advocate
-- Investigation suggestions require review by the supervising officer
-- You do NOT determine guilt or innocence \u2014 that is the court's role
+**Important:** Legal advice is advisory only. You don't determine guilt \u2014 courts do.
 ${caseContext}`;
     let history = [];
     if (session_id) {
