@@ -199,9 +199,11 @@ if (fs.existsSync(frontendDist)) {
   }
 
   // Explicitly serve assets directory with long-lived cache
-  app.use('/assets', express.static(path.join(frontendDist, 'assets'), {
+  const assetsPath = path.join(frontendDist, 'assets');
+  logger.info(`Assets path: ${assetsPath}`);
+  
+  app.use('/assets', express.static(assetsPath, {
     maxAge: '1y',
-    fallthrough: false, // Return 404 if asset not found instead of calling next()
   }));
 
   // Serve other static files (index.html, favicon, etc.) with no cache for HTML
