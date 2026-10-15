@@ -213,8 +213,18 @@ if (fs.existsSync(frontendDist)) {
   // Log a few asset files to verify directory structure
   const assetsDir = path.join(frontendDist, 'assets');
   if (fs.existsSync(assetsDir)) {
-    const assetFiles = fs.readdirSync(assetsDir).slice(0, 3);
-    logger.info(`Sample assets: ${assetFiles.join(', ')}`);
+    const assetFiles = fs.readdirSync(assetsDir);
+    const jsFiles = assetFiles.filter(f => f.endsWith('.js'));
+    const cssFiles = assetFiles.filter(f => f.endsWith('.css'));
+    logger.info(`Assets: ${jsFiles.length} JS, ${cssFiles.length} CSS - samples: ${assetFiles.slice(0, 3).join(', ')}`);
+    
+    // CRITICAL: Verify the exact asset referenced in index.html
+    const criticalAsset = 'index-BZXnqAXL.js';
+    if (fs.existsSync(path.join(assetsDir, criticalAsset))) {
+      logger.info(`✓ ${criticalAsset} EXISTS at startup`);
+    } else {
+      logger.error(`✗ ${criticalAsset} MISSING - available index files: ${jsFiles.filter(f => f.startsWith('index-')).join(', ')}`);
+    }
   } else {
     logger.error(`Assets directory not found: ${assetsDir}`);
   }
