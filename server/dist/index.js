@@ -146,7 +146,7 @@ var notFound = (req, res) => {
 var import_fs = __toESM(require("fs"));
 var import_path = __toESM(require("path"));
 var import_crypto = __toESM(require("crypto"));
-var GEMINI_MODEL = "gemini-2.5-flash";
+var GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-1.5-flash";
 var GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta";
 var _auth = null;
 function resolveAuth() {
@@ -1468,6 +1468,7 @@ var CaseSchema = new import_mongoose7.Schema(
     latitude: { type: Number, index: true },
     longitude: { type: Number, index: true },
     geocoded_at: Date,
+    location_source: { type: String, enum: ["user_location", "manual_coords", "geocoded_address", "manual_address"] },
     // FIR
     fir_number: String,
     fir_date: Date,
@@ -1849,7 +1850,7 @@ router2.get("/map", async (req, res) => {
     if (crime_type) filter.crime_type = { $regex: crime_type, $options: "i" };
     if (fir_number) filter.fir_number = { $regex: fir_number, $options: "i" };
     const cases = await Case_default.find(filter).select("case_number fir_number title crime_type status priority latitude longitude address city state location incident_location io_name incident_date date_of_incident createdAt").populate("assigned_io", "full_name").lean();
-    const markers = cases.map((c) => ({
+    const markers = cases.filter((c) => typeof c.latitude === "number" && typeof c.longitude === "number" && isFinite(c.latitude) && isFinite(c.longitude) && c.latitude >= -90 && c.latitude <= 90 && c.longitude >= -180 && c.longitude <= 180).map((c) => ({
       id: String(c._id),
       case_number: c.case_number,
       fir_number: c.fir_number || "",
@@ -1879,36 +1880,76 @@ router2.get("/map", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch map data", detail: String(err) });
   }
 });
+router2.post("/geocode-address", async (req, res) => {
+  try {
+    const { address } = req.body;
+    if (!address?.trim()) {
+      res.status(400).json({ error: "Address is required" });
+      return;
+    }
+    const result = await geocodeAddress(address.trim());
+    if (result) {
+      res.json({
+        latitude: result.latitude,
+        longitude: result.longitude,
+        display_name: result.display_name
+      });
+    } else {
+      res.status(404).json({ error: "Address could not be geocoded" });
+    }
+  } catch (err) {
+    res.status(500).json({ error: "Geocoding failed", detail: String(err) });
+  }
+});
 router2.post("/geocode-batch", async (req, res) => {
   try {
     const pending = await Case_default.find({
-      $or: [
-        { address: { $exists: true, $ne: "" } },
-        { city: { $exists: true, $ne: "" } },
-        { location: { $exists: true, $ne: "" } }
-      ],
-      latitude: { $exists: false },
-      longitude: { $exists: false }
+      $and: [
+        {
+          $or: [
+            { address: { $exists: true, $ne: "" } },
+            { city: { $exists: true, $ne: "" } },
+            { location: { $exists: true, $ne: "" } },
+            { incident_location: { $exists: true, $ne: "" } }
+          ]
+        },
+        {
+          $or: [
+            { latitude: { $exists: false } },
+            { latitude: null }
+          ]
+        }
+      ]
     }).select("_id case_number address city state location incident_location").lean();
     if (!pending.length) {
       res.json({ message: "No cases require geocoding.", geocoded: 0, total_pending: 0 });
       return;
     }
-    res.json({ message: `Geocoding ${pending.length} cases in background.`, total_pending: pending.length });
+    res.json({ message: `Geocoding ${pending.length} cases in background. Check back in ${Math.ceil(pending.length * 1.5)} seconds.`, total_pending: pending.length });
     (async () => {
       let geocoded = 0;
-      for (const c of pending) {
-        const addr = [c.address, c.city, c.state, c.location, c.incident_location].filter(Boolean).join(", ");
-        if (!addr) continue;
-        await sleep(1200);
-        const result = await geocodeAddress(addr);
-        if (result) {
-          await Case_default.findByIdAndUpdate(c._id, { latitude: result.latitude, longitude: result.longitude, geocoded_at: /* @__PURE__ */ new Date() });
-          geocoded++;
-          logger.info(`Batch geocoded ${c.case_number}: ${result.latitude}, ${result.longitude}`);
+      try {
+        for (const c of pending) {
+          const addr = [c.address, c.city, c.state, c.location, c.incident_location].filter(Boolean).join(", ");
+          if (!addr) {
+            logger.debug(`Skipping ${c.case_number} \u2014 no address`);
+            continue;
+          }
+          await sleep(1200);
+          const result = await geocodeAddress(addr);
+          if (result) {
+            await Case_default.findByIdAndUpdate(c._id, { latitude: result.latitude, longitude: result.longitude, geocoded_at: /* @__PURE__ */ new Date() });
+            geocoded++;
+            logger.info(`Batch geocoded ${c.case_number}: ${result.latitude}, ${result.longitude}`);
+          } else {
+            logger.warn(`Failed to geocode ${c.case_number}: ${addr}`);
+          }
         }
+      } catch (err) {
+        logger.error("Batch geocoding loop error", { err: String(err) });
+      } finally {
+        logger.info(`Batch geocoding complete: ${geocoded}/${pending.length} cases geocoded`);
       }
-      logger.info(`Batch geocoding complete: ${geocoded}/${pending.length} cases geocoded`);
     })().catch((err) => logger.error("Batch geocoding error", { err: String(err) }));
   } catch (err) {
     res.status(500).json({ error: "Batch geocoding failed", detail: String(err) });
@@ -2009,29 +2050,95 @@ router2.post(
       description,
       crime_type,
       incident_date,
+      date_of_incident,
       incident_location,
+      location,
+      address,
+      city,
+      state,
+      pincode,
+      latitude,
+      longitude,
+      location_source,
       fir_number,
       fir_date,
       police_station,
+      station,
+      io_name,
       assigned_io,
       assigned_sho,
       prosecutor_id,
       priority,
-      tags
+      tags,
+      status
     } = req.body;
-    const year = (/* @__PURE__ */ new Date()).getFullYear();
-    const count = await Case_default.countDocuments({ createdAt: { $gte: /* @__PURE__ */ new Date(`${year}-01-01`), $lt: /* @__PURE__ */ new Date(`${year + 1}-01-01`) } });
-    const case_number = `JAI-${year}-${String(count + 1).padStart(5, "0")}`;
+    if (latitude !== void 0 || longitude !== void 0) {
+      const lat2 = typeof latitude === "number" ? latitude : parseFloat(latitude);
+      const lon2 = typeof longitude === "number" ? longitude : parseFloat(longitude);
+      if (isNaN(lat2) || isNaN(lon2) || lat2 < -90 || lat2 > 90 || lon2 < -180 || lon2 > 180) {
+        res.status(400).json({ error: "Invalid coordinates" });
+        return;
+      }
+    }
+    const effLocation = (location || incident_location || address || "").trim();
+    const effDate = incident_date || date_of_incident || void 0;
+    const effStation = station || police_station || "";
+    const effIoName = io_name || "";
+    const effStatus = status || "open";
+    let finalCaseNumber = (req.body.case_number || "").trim();
+    if (!finalCaseNumber) {
+      const year = (/* @__PURE__ */ new Date()).getFullYear();
+      const count = await Case_default.countDocuments({ createdAt: { $gte: /* @__PURE__ */ new Date(`${year}-01-01`), $lt: /* @__PURE__ */ new Date(`${year + 1}-01-01`) } });
+      finalCaseNumber = `JAI-${year}-${String(count + 1).padStart(5, "0")}`;
+    } else {
+      const existing = await Case_default.findOne({ case_number: finalCaseNumber });
+      if (existing) {
+        const year = (/* @__PURE__ */ new Date()).getFullYear();
+        const count = await Case_default.countDocuments({ createdAt: { $gte: /* @__PURE__ */ new Date(`${year}-01-01`), $lt: /* @__PURE__ */ new Date(`${year + 1}-01-01`) } });
+        finalCaseNumber = `${finalCaseNumber}-${String(count + 1).padStart(4, "0")}`;
+      }
+    }
+    let lat = typeof latitude === "number" && isFinite(latitude) ? latitude : void 0;
+    let lon = typeof longitude === "number" && isFinite(longitude) ? longitude : void 0;
+    let geocodedAt = lat !== void 0 && lon !== void 0 ? /* @__PURE__ */ new Date() : void 0;
+    let finalLocationSource = location_source;
+    if ((lat === void 0 || lon === void 0) && !location_source && effLocation) {
+      try {
+        const geo = await geocodeAddress(effLocation);
+        if (geo) {
+          lat = geo.latitude;
+          lon = geo.longitude;
+          geocodedAt = /* @__PURE__ */ new Date();
+          finalLocationSource = "geocoded_address";
+          logger.info(`Auto-geocoded case address: ${effLocation} -> ${lat}, ${lon}`);
+        }
+      } catch (e) {
+        logger.warn(`Failed to auto-geocode case on creation: ${String(e)}`);
+      }
+    }
     const newCase = await Case_default.create({
-      case_number,
+      case_number: finalCaseNumber,
       title,
       description,
+      status: effStatus,
       crime_type,
-      incident_date: incident_date || void 0,
-      incident_location,
+      incident_date: effDate,
+      date_of_incident: effDate,
+      incident_location: effLocation,
+      location: effLocation,
+      address: address || effLocation,
+      city: city || void 0,
+      state: state || void 0,
+      pincode: pincode || void 0,
+      latitude: lat,
+      longitude: lon,
+      geocoded_at: geocodedAt,
+      location_source: finalLocationSource,
       fir_number,
       fir_date: fir_date || void 0,
-      police_station,
+      police_station: effStation,
+      station: effStation,
+      io_name: effIoName,
       assigned_io: assigned_io || req.user.id,
       assigned_sho: assigned_sho || void 0,
       prosecutor_id: prosecutor_id || void 0,
@@ -2061,9 +2168,20 @@ router2.put("/:id", async (req, res) => {
     "status",
     "crime_type",
     "incident_date",
+    "date_of_incident",
     "incident_location",
+    "location",
+    "address",
+    "city",
+    "state",
+    "pincode",
+    "latitude",
+    "longitude",
     "fir_number",
+    "fir_date",
     "police_station",
+    "station",
+    "io_name",
     "assigned_io",
     "assigned_sho",
     "prosecutor_id",
