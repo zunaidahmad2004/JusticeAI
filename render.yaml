@@ -6,7 +6,7 @@ services:
     name: justiceai-backend
     runtime: node
     rootDir: server
-    buildCommand: npm install --include=dev && node build.mjs
+    buildCommand: cd ../client && npm install && npm run build && cd ../server && npm install --include=dev && node build.mjs
     startCommand: node prestart.mjs && node dist/index.js
     healthCheckPath: /api/health
     autoDeploy: true
