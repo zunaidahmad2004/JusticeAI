@@ -19,6 +19,13 @@ interface FormData {
   priority: string;
   date_of_incident: string;
   location?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  pincode?: string;
+  latitude?: number;
+  longitude?: number;
+  location_source?: string;
   io_name?: string;
   station?: string;
 }
@@ -26,17 +33,105 @@ interface FormData {
 export default function NewCasePage() {
   const navigate = useNavigate();
   const [submitting, setSubmitting] = useState(false);
+  const [locatingUser, setLocatingUser] = useState(false);
+  const [locationMethod, setLocationMethod] = useState<'none' | 'user_location' | 'manual_coords' | 'manual_address'>('none');
+  const [locationError, setLocationError] = useState('');
+  const [geocodingAddress, setGeocodingAddress] = useState(false);
+  
   const {
     register,
     handleSubmit,
     formState: { errors },
+    setValue,
+    watch,
   } = useForm<FormData>({
     defaultValues: {
       status: 'open',
       priority: 'medium',
       date_of_incident: new Date().toISOString().split('T')[0],
+      location_source: undefined,
     },
   });
+
+  const watchedLatitude = watch('latitude');
+  const watchedLongitude = watch('longitude');
+  const watchedAddress = watch('address');
+  const watchedCity = watch('city');
+  const watchedState = watch('state');
+
+  const useMyLocation = () => {
+    if (!navigator.geolocation) {
+      setLocationError('Geolocation is not supported by your browser');
+      return;
+    }
+
+    setLocatingUser(true);
+    setLocationError('');
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setValue('latitude', position.coords.latitude);
+        setValue('longitude', position.coords.longitude);
+        setValue('location_source', 'user_location');
+        setLocationMethod('user_location');
+        setLocatingUser(false);
+        toast.success(`Location captured: ${position.coords.latitude.toFixed(6)}, ${position.coords.longitude.toFixed(6)}`);
+      },
+      (error) => {
+        setLocatingUser(false);
+        if (error.code === 1) {
+          setLocationError('Location permission denied. Please enter location manually.');
+        } else if (error.code === 2) {
+          setLocationError('Location unavailable. Please enter location manually.');
+        } else {
+          setLocationError('Location request timed out. Please try again or enter manually.');
+        }
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  };
+
+  const geocodeManualAddress = async () => {
+    const address = watchedAddress;
+    const city = watchedCity;
+    const state = watchedState;
+    
+    if (!address && !city) {
+      toast.error('Please enter at least an address or city to geocode');
+      return;
+    }
+
+    const fullAddress = [address, city, state, 'India'].filter(Boolean).join(', ');
+    
+    setGeocodingAddress(true);
+    setLocationError('');
+
+    try {
+      const response = await api.post('/cases/geocode-address', { address: fullAddress });
+      if (response.data.latitude && response.data.longitude) {
+        setValue('latitude', response.data.latitude);
+        setValue('longitude', response.data.longitude);
+        setValue('location_source', 'geocoded_address');
+        setLocationMethod('manual_address');
+        toast.success(`Address geocoded: ${response.data.display_name || fullAddress}`);
+      } else {
+        setLocationError('Could not geocode this address. Please enter coordinates manually.');
+      }
+    } catch (error) {
+      setLocationError('Geocoding failed. Please enter coordinates manually.');
+      console.error('Geocoding error:', error);
+    } finally {
+      setGeocodingAddress(false);
+    }
+  };
+
+  const clearLocation = () => {
+    setValue('latitude', undefined);
+    setValue('longitude', undefined);
+    setValue('location_source', undefined);
+    setLocationMethod('none');
+    setLocationError('');
+  };
 
   const onSubmit = async (data: FormData) => {
     setSubmitting(true);
@@ -223,18 +318,248 @@ export default function NewCasePage() {
 
             <div className="md:col-span-2">
               <label htmlFor="location" className="input-label">
-                Location
+                Incident Location (Display Text)
               </label>
               <div className="relative">
                 <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
                 <input
                   id="location"
-                  placeholder="City, District, State"
+                  placeholder="Brief location description (e.g., 'Near Central Park, Mumbai')"
                   className="input pl-12"
                   {...register('location')}
                 />
               </div>
+              <p className="text-xs text-slate-500 mt-1">This is shown in case listings. Add detailed address below.</p>
             </div>
+          </div>
+        </div>
+
+        {/* Location Details - NEW SECTION */}
+        <div className="glass-card p-8">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center">
+                <MapPin className="w-5 h-5 text-blue-400" />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-white">Incident Location Details</h2>
+                <p className="text-xs text-slate-500">Precise location for map visualization</p>
+              </div>
+            </div>
+            {locationMethod !== 'none' && (
+              <button
+                type="button"
+                onClick={clearLocation}
+                className="text-xs text-red-400 hover:text-red-300 flex items-center gap-1"
+              >
+                <X className="w-3 h-3" />
+                Clear Location
+              </button>
+            )}
+          </div>
+
+          {/* Location Status */}
+          {watchedLatitude && watchedLongitude && (
+            <div className="mb-4 p-3 rounded-lg bg-green-500/10 border border-green-500/20">
+              <p className="text-sm text-green-400 flex items-center gap-2">
+                <MapPin className="w-4 h-4" />
+                Location Captured: {watchedLatitude.toFixed(6)}, {watchedLongitude.toFixed(6)}
+                {locationMethod === 'user_location' && ' (Your Current Location)'}
+                {locationMethod === 'manual_address' && ' (Geocoded from Address)'}
+                {locationMethod === 'manual_coords' && ' (Manual Entry)'}
+              </p>
+            </div>
+          )}
+
+          {locationError && (
+            <div className="mb-4 p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
+              <p className="text-sm text-yellow-400 flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4" />
+                {locationError}
+              </p>
+            </div>
+          )}
+
+          {/* Location Method Selection */}
+          {locationMethod === 'none' && (
+            <div className="space-y-3 mb-6">
+              <p className="text-sm text-slate-400">Choose how to specify the incident location:</p>
+              <div className="grid md:grid-cols-3 gap-3">
+                <button
+                  type="button"
+                  onClick={useMyLocation}
+                  disabled={locatingUser}
+                  className="p-4 rounded-xl border border-base-border hover:border-blue-500/50 hover:bg-blue-500/5 transition-all text-left group"
+                >
+                  <Locate className={`w-5 h-5 text-blue-400 mb-2 ${locatingUser ? 'animate-pulse' : 'group-hover:scale-110 transition-transform'}`} />
+                  <h3 className="text-sm font-semibold text-white">Use My Location</h3>
+                  <p className="text-xs text-slate-500 mt-1">
+                    {locatingUser ? 'Requesting permission...' : 'Capture current GPS coordinates'}
+                  </p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setLocationMethod('manual_address')}
+                  className="p-4 rounded-xl border border-base-border hover:border-purple-500/50 hover:bg-purple-500/5 transition-all text-left group"
+                >
+                  <Building2 className="w-5 h-5 text-purple-400 mb-2 group-hover:scale-110 transition-transform" />
+                  <h3 className="text-sm font-semibold text-white">Enter Address</h3>
+                  <p className="text-xs text-slate-500 mt-1">Address will be geocoded automatically</p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setLocationMethod('manual_coords')}
+                  className="p-4 rounded-xl border border-base-border hover:border-green-500/50 hover:bg-green-500/5 transition-all text-left group"
+                >
+                  <MapPin className="w-5 h-5 text-green-400 mb-2 group-hover:scale-110 transition-transform" />
+                  <h3 className="text-sm font-semibold text-white">Manual Coordinates</h3>
+                  <p className="text-xs text-slate-500 mt-1">Enter exact latitude/longitude</p>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Manual Address Entry */}
+          {locationMethod === 'manual_address' && !watchedLatitude && (
+            <div className="space-y-4">
+              <div className="grid md:grid-cols-2 gap-4">
+                <div className="md:col-span-2">
+                  <label htmlFor="address" className="input-label">Street Address / Landmark</label>
+                  <input
+                    id="address"
+                    placeholder="e.g., 123 Main Street, Near City Hospital"
+                    className="input"
+                    {...register('address')}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="city" className="input-label">City</label>
+                  <input
+                    id="city"
+                    placeholder="e.g., Mumbai"
+                    className="input"
+                    {...register('city')}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="state" className="input-label">State</label>
+                  <input
+                    id="state"
+                    placeholder="e.g., Maharashtra"
+                    className="input"
+                    {...register('state')}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="pincode" className="input-label">PIN Code</label>
+                  <input
+                    id="pincode"
+                    placeholder="e.g., 400001"
+                    className="input"
+                    {...register('pincode')}
+                  />
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={geocodeManualAddress}
+                disabled={geocodingAddress || (!watchedAddress && !watchedCity)}
+                className="btn-primary"
+              >
+                {geocodingAddress ? (
+                  <>
+                    <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Geocoding...
+                  </>
+                ) : (
+                  <>
+                    <MapPin className="w-4 h-4" />
+                    Geocode Address
+                  </>
+                )}
+              </button>
+            </div>
+          )}
+
+          {/* Manual Coordinates Entry */}
+          {locationMethod === 'manual_coords' && (
+            <div className="space-y-4">
+              <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor="latitude" className="input-label">
+                    Latitude * <span className="text-xs text-slate-500">(India: 8° to 37°)</span>
+                  </label>
+                  <input
+                    id="latitude"
+                    type="number"
+                    step="0.000001"
+                    placeholder="e.g., 19.075984"
+                    className="input"
+                    {...register('latitude', { 
+                      required: locationMethod === 'manual_coords' ? 'Latitude is required' : false,
+                      min: { value: -90, message: 'Invalid latitude' },
+                      max: { value: 90, message: 'Invalid latitude' },
+                      valueAsNumber: true,
+                    })}
+                  />
+                  {errors.latitude && (
+                    <p className="text-xs text-red-400 mt-1 flex items-center gap-1">
+                      <AlertCircle className="w-3 h-3" />
+                      {errors.latitude.message}
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <label htmlFor="longitude" className="input-label">
+                    Longitude * <span className="text-xs text-slate-500">(India: 68° to 97°)</span>
+                  </label>
+                  <input
+                    id="longitude"
+                    type="number"
+                    step="0.000001"
+                    placeholder="e.g., 72.877426"
+                    className="input"
+                    {...register('longitude', { 
+                      required: locationMethod === 'manual_coords' ? 'Longitude is required' : false,
+                      min: { value: -180, message: 'Invalid longitude' },
+                      max: { value: 180, message: 'Invalid longitude' },
+                      valueAsNumber: true,
+                    })}
+                  />
+                  {errors.longitude && (
+                    <p className="text-xs text-red-400 mt-1 flex items-center gap-1">
+                      <AlertCircle className="w-3 h-3" />
+                      {errors.longitude.message}
+                    </p>
+                  )}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (watchedLatitude && watchedLongitude) {
+                    setValue('location_source', 'manual_coords');
+                    toast.success('Coordinates validated');
+                  }
+                }}
+                disabled={!watchedLatitude || !watchedLongitude}
+                className="btn-primary"
+              >
+                <MapPin className="w-4 h-4" />
+                Validate Coordinates
+              </button>
+            </div>
+          )}
+
+          {/* Info Box */}
+          <div className="mt-6 p-4 rounded-lg bg-base-elevated border border-base-border">
+            <p className="text-xs text-slate-400 leading-relaxed">
+              <strong className="text-white">Important:</strong> The incident location should be where the crime occurred, 
+              not where it was reported. If you're reporting from your current location, use "Enter Address" or "Manual Coordinates" 
+              to specify the actual incident location.
+            </p>
           </div>
         </div>
 

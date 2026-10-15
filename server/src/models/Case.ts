@@ -23,6 +23,7 @@ export interface ICase extends Document {
   latitude?: number;
   longitude?: number;
   geocoded_at?: Date;              // when coordinates were last resolved
+  location_source?: 'user_location' | 'manual_coords' | 'geocoded_address' | 'manual_address';  // how location was obtained
 
   // FIR details
   fir_number?: string;
@@ -73,6 +74,7 @@ const CaseSchema = new Schema<ICase>(
     latitude:         { type: Number, index: true },
     longitude:        { type: Number, index: true },
     geocoded_at:      Date,
+    location_source:  { type: String, enum: ['user_location', 'manual_coords', 'geocoded_address', 'manual_address'] },
 
     // FIR
     fir_number: String,

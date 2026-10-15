@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import {
   MapPin, Locate, RefreshCw, AlertTriangle,
   X, ExternalLink, Search, Layers, Filter,
@@ -18,15 +18,8 @@ interface CaseMarker {
   io_name: string; date_of_incident: string;
 }
 
-interface NewsMarker {
-  kind: 'news';
-  id: string; headline: string; source: string; source_url: string;
-  crime_type: string; city: string; state: string; address: string;
-  summary: string; severity: 'high'|'medium'|'low';
-  latitude: number; longitude: number; published_at: string;
-}
-
-type AnyMarker = CaseMarker | NewsMarker;
+// NewsMarker removed - map now displays only genuine authorized case records
+type AnyMarker = CaseMarker;
 interface OfficerLoc { lat: number; lng: number; }
 
 /* ─── Constants ──────────────────────────────────────────────────────────── */
@@ -36,6 +29,7 @@ const P_COLOR: Record<string, string> = {
 const SEV_COLOR: Record<string, string> = {
   high:'#EF4444', medium:'#F59E0B', low:'#3B82F6',
 };
+// Removed - no longer needed for news markers
 const CRIME_TYPES = ['all','Murder','Theft','Assault','Cyber Crime','Fraud','Kidnapping','Drugs','Women Safety'];
 const DATE_FILTERS = [
   { label:'All Time',   hours: 0    },
@@ -68,14 +62,7 @@ function caseIcon(color:string,L:any){
   return new L.DivIcon({html:`<div style="filter:drop-shadow(0 2px 5px rgba(0,0,0,0.55))">${s}</div>`,iconSize:[26,34],iconAnchor:[13,34],popupAnchor:[0,-36],className:''});
 }
 
-function newsIcon(color:string,L:any){
-  const s=`<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
-    <circle cx="12" cy="12" r="11" fill="${color}" stroke="rgba(0,0,0,0.3)" stroke-width="1.5"/>
-    <circle cx="12" cy="12" r="5" fill="white" opacity="0.85"/>
-    <circle cx="12" cy="12" r="2" fill="${color}"/>
-  </svg>`;
-  return new L.DivIcon({html:`<div style="filter:drop-shadow(0 2px 5px rgba(0,0,0,0.5))">${s}</div>`,iconSize:[24,24],iconAnchor:[12,12],popupAnchor:[0,-14],className:''});
-}
+// newsIcon removed - map displays only authorized case records
 
 function officerIcon(L:any){
   const s=`<svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 34 34">
@@ -97,7 +84,6 @@ export default function CrimeHeatmap() {
   const heatRef    = useRef<any>(null);
   const officerRef = useRef<any>(null);
   const radiusRef  = useRef<any>(null);
-  const watchId    = useRef<number|null>(null);
 
   const [officer,    setOfficer]    = useState<OfficerLoc|null>(null);
   const [caseMarkers,   setCaseMarkers]    = useState<CaseMarker[]>([]);
@@ -157,25 +143,32 @@ export default function CrimeHeatmap() {
 
   /* ── Geolocation ─────────────────────────────────────────────────────── */
   const locate = useCallback(() => {
-    if (!navigator.geolocation) { setLocError('Geolocation not supported.'); return; }
+    if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
+      setLocError('Geolocation requires HTTPS in production.');
+      return;
+    }
+    if (!navigator.geolocation) { 
+      setLocError('Geolocation not supported by your browser.'); 
+      return; 
+    }
+    setLocError('Requesting location...');
     navigator.geolocation.getCurrentPosition(
       (p) => {
         const loc = { lat: p.coords.latitude, lng: p.coords.longitude };
         setOfficer(loc); setLocError('');
         mapRef.current?.setView([loc.lat, loc.lng], 12, { animate: true });
       },
-      (e) => setLocError(e.code === 1 ? 'Location permission denied.' : 'Location unavailable.'),
-      { enableHighAccuracy: true, timeout: 10000 }
+      (e) => {
+        if (e.code === 1) {
+          setLocError('Location permission denied. You can still search by city.');
+        } else if (e.code === 2) {
+          setLocError('Location unavailable. Check your device settings.');
+        } else {
+          setLocError('Location request timed out. Try again.');
+        }
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 }
     );
-  }, []);
-
-  useEffect(() => {
-    if (!navigator.geolocation) return;
-    watchId.current = navigator.geolocation.watchPosition(
-      (p) => setOfficer({ lat: p.coords.latitude, lng: p.coords.longitude }),
-      () => {}, { enableHighAccuracy: true }
-    );
-    return () => { if (watchId.current !== null) navigator.geolocation.clearWatch(watchId.current!); };
   }, []);
 
   /* ── Init map ────────────────────────────────────────────────────────── */
@@ -188,14 +181,16 @@ export default function CrimeHeatmap() {
         center: [20.5937, 78.9629], zoom: 5,
         zoomControl: false, attributionControl: true,
       });
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        maxZoom: 19, subdomains: 'abcd',
-        attribution: '&copy; <a href="https://openstreetmap.org">OSM</a> &copy; <a href="https://carto.com">CARTO</a>',
+      // Use OpenStreetMap with .map-tiles-dark CSS filter to prevent CARTO watermark key requirement
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        className: 'map-tiles-dark',
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a> contributors',
       }).addTo(map);
       L.control.zoom({ position: 'bottomright' }).addTo(map);
       mapRef.current = map;
       setMapReady(true);
-      locate();
+      // Location is requested only when user clicks "My Location" button
     });
     return () => { if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; } };
   }, []);
@@ -210,15 +205,48 @@ export default function CrimeHeatmap() {
       officerRef.current = L.marker([officer.lat, officer.lng], { icon: officerIcon(L), zIndexOffset: 1000 })
         .addTo(mapRef.current)
         .bindPopup('<b style="color:#1e293b">&#128205; Your Location</b>');
+      
       radiusRef.current?.remove();
-      radiusRef.current = L.circle([officer.lat, officer.lng], {
-        radius: radius*1000, color:'#3B82F6', fillColor:'#3B82F6',
-        fillOpacity:0.04, weight:1.5, dashArray:'6 4',
-      }).addTo(mapRef.current);
+      if (radius > 0) {
+        radiusRef.current = L.circle([officer.lat, officer.lng], {
+          radius: radius*1000, color:'#3B82F6', fillColor:'#3B82F6',
+          fillOpacity:0.04, weight:1.5, dashArray:'6 4',
+        }).addTo(mapRef.current);
+      }
     });
   }, [officer, radius]);
 
-  useEffect(() => { radiusRef.current?.setRadius(radius*1000); }, [radius]);
+  /* ── Filtered Markers (with memoization, bounds check & radius) ───────── */
+  const filteredCases = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return caseMarkers.filter(m => {
+      if (typeof m.latitude !== 'number' || typeof m.longitude !== 'number' || !isFinite(m.latitude) || !isFinite(m.longitude)) return false;
+      if (m.latitude < -90 || m.latitude > 90 || m.longitude < -180 || m.longitude > 180) return false;
+      const matchPri  = priority === 'all' || m.priority === priority;
+      const matchType = crimeType === 'all' || (m.crime_type || '').toLowerCase().includes(crimeType.toLowerCase());
+      const matchDate = dateFilter === 0 || (Date.now() - new Date(m.date_of_incident).getTime()) < dateFilter * 3600000;
+      const matchQ    = !q || (m.title || '').toLowerCase().includes(q) || (m.case_number || '').toLowerCase().includes(q) ||
+                        (m.fir_number || '').toLowerCase().includes(q) || (m.city || '').toLowerCase().includes(q) ||
+                        (m.crime_type || '').toLowerCase().includes(q);
+      const matchRadius = !officer || radius === 0 || distKm(officer.lat, officer.lng, m.latitude, m.longitude) <= radius;
+      return matchPri && matchType && matchDate && matchQ && matchRadius;
+    });
+  }, [caseMarkers, priority, crimeType, dateFilter, search, officer, radius]);
+
+  const filteredNews = useMemo(() => {
+    if (!showNews) return [];
+    const q = search.trim().toLowerCase();
+    return newsMarkers.filter(m => {
+      if (typeof m.latitude !== 'number' || typeof m.longitude !== 'number' || !isFinite(m.latitude) || !isFinite(m.longitude)) return false;
+      if (m.latitude < -90 || m.latitude > 90 || m.longitude < -180 || m.longitude > 180) return false;
+      const matchType = crimeType === 'all' || (m.crime_type || '').toLowerCase().includes(crimeType.toLowerCase());
+      const matchDate = dateFilter === 0 || (Date.now() - new Date(m.published_at).getTime()) < dateFilter * 3600000;
+      const matchQ    = !q || (m.headline || '').toLowerCase().includes(q) || (m.city || '').toLowerCase().includes(q) ||
+                        (m.crime_type || '').toLowerCase().includes(q);
+      const matchRadius = !officer || radius === 0 || distKm(officer.lat, officer.lng, m.latitude, m.longitude) <= radius;
+      return matchType && matchDate && matchQ && matchRadius;
+    });
+  }, [newsMarkers, showNews, crimeType, dateFilter, search, officer, radius]);
 
   /* ── Render markers / heatmap ────────────────────────────────────────── */
   useEffect(() => {
@@ -228,34 +256,12 @@ export default function CrimeHeatmap() {
       clusterRef.current?.remove(); clusterRef.current = null;
       heatRef.current?.remove();    heatRef.current    = null;
 
-      const q = search.toLowerCase();
-
-      // Case markers (from MongoDB)
-      const filteredCases = caseMarkers.filter(m => {
-        const matchPri  = priority === 'all' || m.priority === priority;
-        const matchType = crimeType === 'all' || m.crime_type.toLowerCase().includes(crimeType.toLowerCase());
-        const matchDate = dateFilter === 0 || (Date.now() - new Date(m.date_of_incident).getTime()) < dateFilter * 3600000;
-        const matchQ    = !q || m.title.toLowerCase().includes(q) || m.case_number.toLowerCase().includes(q) ||
-                          m.fir_number.toLowerCase().includes(q) || m.city.toLowerCase().includes(q) ||
-                          m.crime_type.toLowerCase().includes(q);
-        return matchPri && matchType && matchDate && matchQ;
-      });
-
-      // News markers (from public feed)
-      const filteredNews = showNews ? newsMarkers.filter(m => {
-        const matchType = crimeType === 'all' || m.crime_type.toLowerCase().includes(crimeType.toLowerCase());
-        const matchDate = dateFilter === 0 || (Date.now() - new Date(m.published_at).getTime()) < dateFilter * 3600000;
-        const matchQ    = !q || m.headline.toLowerCase().includes(q) || m.city.toLowerCase().includes(q) ||
-                          m.crime_type.toLowerCase().includes(q);
-        return matchType && matchDate && matchQ;
-      }) : [];
-
       const allVisible = [...filteredCases, ...filteredNews];
 
       if (heatmap) {
         // Heatmap mode using Leaflet.heat
         const points = allVisible
-          .filter(m => m.latitude && m.longitude)
+          .filter(m => typeof m.latitude === 'number' && typeof m.longitude === 'number' && isFinite(m.latitude) && isFinite(m.longitude))
           .map(m => {
             const intensity = m.kind === 'case'
               ? { critical:1, high:0.8, medium:0.5, low:0.3 }[m.priority] ?? 0.5
@@ -319,10 +325,10 @@ export default function CrimeHeatmap() {
       clusterRef.current = group;
       mapRef.current.addLayer(group);
     });
-  }, [caseMarkers, newsMarkers, priority, crimeType, dateFilter, search, heatmap, showNews, officer]);
+  }, [filteredCases, filteredNews, heatmap, showNews, officer]);
 
   /* ── Counts ──────────────────────────────────────────────────────────── */
-  const totalVisible = caseMarkers.length + (showNews ? newsMarkers.length : 0);
+  const totalVisible = filteredCases.length + filteredNews.length;
 
   const refreshAll = () => { fetchCases(); fetchNews(); };
   const centerOnOfficer = () => {
@@ -344,7 +350,7 @@ export default function CrimeHeatmap() {
             <div>
               <h2 className="text-sm font-semibold text-white">Crime Incident Map</h2>
               <p className="text-xs text-slate-500">
-                {loading || newsLoading ? 'Loading...' : `${caseMarkers.length} cases · ${newsMarkers.length} news`}
+                {loading || newsLoading ? 'Loading...' : `${filteredCases.length} cases · ${filteredNews.length} news`}
                 {statsMsg ? ` · ${statsMsg}` : ''}
               </p>
             </div>
@@ -353,10 +359,10 @@ export default function CrimeHeatmap() {
           <div className="flex items-center gap-1.5 flex-wrap">
             {/* Radius */}
             <div className="flex gap-0.5 bg-base-elevated rounded-lg p-0.5 border border-base-border">
-              {[5,10,25].map(r=>(
+              {[5,10,25,0].map(r=>(
                 <button key={r} onClick={()=>setRadius(r)}
                   className={`px-2 py-1 rounded-md text-[10px] font-semibold transition-all ${radius===r?'bg-blue-500/20 text-blue-400':'text-slate-500 hover:text-slate-300'}`}>
-                  {r}km
+                  {r === 0 ? 'All' : `${r}km`}
                 </button>
               ))}
             </div>
@@ -434,6 +440,41 @@ export default function CrimeHeatmap() {
           </div>
         )}
 
+        {/* Empty state card */}
+        {totalVisible === 0 && !loading && !newsLoading && (
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 glass-strong border border-base-border rounded-2xl p-6 text-center max-w-sm shadow-card pointer-events-auto">
+            <div className="w-12 h-12 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center mx-auto mb-3">
+              <MapPin className="w-6 h-6 text-blue-400" />
+            </div>
+            <h3 className="text-sm font-semibold text-white mb-1">No Incidents Found</h3>
+            <p className="text-xs text-slate-400 leading-relaxed mb-4">
+              {officer && radius > 0
+                ? `No geocoded cases or public news incidents match your filters within ${radius} km.`
+                : 'No geocoded cases or public crime incidents match the selected filters.'}
+            </p>
+            <div className="flex items-center justify-center gap-2">
+              <button
+                onClick={() => {
+                  setCrimeType('all');
+                  setPriority('all');
+                  setDateFilter(0);
+                  setSearch('');
+                  setRadius(0);
+                }}
+                className="btn-secondary btn-sm text-xs"
+              >
+                Reset Filters
+              </button>
+              <button
+                onClick={refreshAll}
+                className="btn-primary btn-sm text-xs"
+              >
+                <RefreshCw className="w-3.5 h-3.5" /> Refresh
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* My location */}
         <button onClick={centerOnOfficer} title="My Location"
           className="absolute top-3 right-3 z-10 w-9 h-9 rounded-xl bg-base-card/90 backdrop-blur-sm border border-base-border flex items-center justify-center text-blue-400 hover:bg-base-elevated hover:border-blue-500/40 transition-all shadow-card">
@@ -465,7 +506,7 @@ export default function CrimeHeatmap() {
           <div className="glass-strong rounded-xl px-3 py-1.5">
             <p className="text-[10px] text-slate-400">
               <span className="text-white font-semibold">{totalVisible}</span> total incident{totalVisible!==1?'s':''}{' '}
-              {officer && <>· <span className="text-blue-400">{radius}km radius</span></>}
+              {officer && (radius > 0 ? <>· <span className="text-blue-400">{radius}km radius</span></> : <>· <span className="text-slate-400">All distances</span></>)}
             </p>
             {lastFetch && (() => {
               try {
