@@ -188,6 +188,15 @@ const frontendDist = path.resolve(__dirname, './client');
 
 if (fs.existsSync(frontendDist)) {
   logger.info(`Serving frontend from: ${frontendDist}`);
+  
+  // Log a few asset files to verify directory structure
+  const assetsDir = path.join(frontendDist, 'assets');
+  if (fs.existsSync(assetsDir)) {
+    const assetFiles = fs.readdirSync(assetsDir).slice(0, 3);
+    logger.info(`Sample assets: ${assetFiles.join(', ')}`);
+  } else {
+    logger.error(`Assets directory not found: ${assetsDir}`);
+  }
 
   // Serve hashed assets with long-lived cache; never cache index.html
   app.use(express.static(frontendDist, {
