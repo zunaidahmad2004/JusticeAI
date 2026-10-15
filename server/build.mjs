@@ -1,5 +1,5 @@
 import * as esbuild from 'esbuild';
-import { readFileSync, existsSync, cpSync, mkdirSync, readdirSync } from 'fs';
+import { readFileSync, existsSync, cpSync, mkdirSync, readdirSync, rmSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -30,26 +30,44 @@ await esbuild.build({
 const clientDist = join(__dirname, '../client/dist');
 const serverClientDist = join(__dirname, 'dist/client');
 
+console.log('[build] Checking frontend build...');
+console.log(`[build]   Source: ${clientDist}`);
+console.log(`[build]   Target: ${serverClientDist}`);
+
 if (existsSync(clientDist)) {
+  // Remove old frontend to ensure clean copy and avoid stale files
+  if (existsSync(serverClientDist)) {
+    console.log('[build] Removing old frontend to ensure clean copy...');
+    try {
+      rmSync(serverClientDist, { recursive: true, force: true });
+    } catch (e) {
+      console.warn('[build] Could not remove old frontend:', e.message);
+    }
+  }
+  
   mkdirSync(serverClientDist, { recursive: true });
   cpSync(clientDist, serverClientDist, { recursive: true });
-  console.log('Frontend dist copied to server/dist/client');
+  console.log('[build] ✓ Frontend copied to server/dist/client');
 } else {
-  console.warn('WARNING: client/dist not found. Run npm run build in client/ first.');
+  console.error('[build] ❌ FATAL: client/dist not found!');
+  console.error('[build]    The frontend must be built before the backend.');
+  console.error('[build]    Render build command should include:');
+  console.error('[build]      npm --prefix ../client install && npm --prefix ../client run build');
+  process.exit(1);
 }
 
 // ── Verify critical assets exist ─────────────────────────────────────────────
 const indexHtml = join(__dirname, 'dist/client/index.html');
 if (!existsSync(indexHtml)) {
-  console.error('ERROR: dist/client/index.html not found after build!');
-  console.error('Frontend build did not complete successfully.');
+  console.error('[build] ❌ FATAL: dist/client/index.html not found after copy!');
+  console.error('[build]    Frontend build did not complete successfully.');
   process.exit(1);
 }
 
 const assetsDir = join(__dirname, 'dist/client/assets');
 if (!existsSync(assetsDir)) {
-  console.error('ERROR: dist/client/assets directory not found!');
-  console.error('Frontend assets were not copied correctly.');
+  console.error('[build] ❌ FATAL: dist/client/assets directory not found!');
+  console.error('[build]    Frontend assets were not copied correctly.');
   process.exit(1);
 }
 
@@ -58,10 +76,31 @@ const jsAssets = assetFiles.filter(f => f.endsWith('.js'));
 const cssAssets = assetFiles.filter(f => f.endsWith('.css'));
 
 if (jsAssets.length === 0 || cssAssets.length === 0) {
-  console.error('ERROR: No JS or CSS assets found in dist/client/assets!');
-  console.error(`Found ${jsAssets.length} JS files and ${cssAssets.length} CSS files.`);
+  console.error('[build] ❌ FATAL: No JS or CSS assets found in dist/client/assets!');
+  console.error(`[build]    Found ${jsAssets.length} JS files and ${cssAssets.length} CSS files.`);
   process.exit(1);
 }
 
-console.log(`✓ Verified: ${jsAssets.length} JS files, ${cssAssets.length} CSS files`);
-console.log('Build complete: dist/index.js');
+console.log(`[build] ✓ Verified: ${jsAssets.length} JS files, ${cssAssets.length} CSS files`);
+
+// Verify HTML-referenced assets exist
+const htmlContent = readFileSync(indexHtml, 'utf-8');
+const assetMatches = htmlContent.matchAll(/(src|href)="(\/assets\/[^"]+)"/g);
+const referencedAssets = Array.from(assetMatches, m => m[2]);
+
+console.log(`[build] ✓ HTML references ${referencedAssets.length} assets`);
+
+const missingAssets = referencedAssets.filter(assetUrl => {
+  const assetPath = join(__dirname, 'dist/client', assetUrl);
+  return !existsSync(assetPath);
+});
+
+if (missingAssets.length > 0) {
+  console.error('[build] ❌ FATAL: HTML references assets that don\'t exist:');
+  missingAssets.forEach(asset => console.error(`[build]    ${asset}`));
+  console.error('[build]    This means the HTML and assets are from different builds!');
+  process.exit(1);
+}
+
+console.log('[build] ✓ All HTML-referenced assets verified');
+console.log('[build] Build complete: dist/index.js');
