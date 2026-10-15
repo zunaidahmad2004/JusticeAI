@@ -104,7 +104,10 @@ export interface InvestigationRiskReport {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const GEMINI_MODEL    = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
+const GEMINI_FALLBACK = process.env.GEMINI_FALLBACK_MODEL || 'gemini-flash-lite-latest';
 const GEMINI_BASE     = 'https://generativelanguage.googleapis.com/v1beta';
+const MAX_RETRIES     = 3;
+const INITIAL_RETRY_DELAY = 1000; // 1 second
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 
@@ -280,18 +283,19 @@ async function getServiceAccountToken(credPath: string): Promise<string> {
 
 interface ReqMeta { url: string; headers: Record<string, string>; }
 
-async function buildRequest(endpoint: string, stream = false): Promise<ReqMeta> {
+async function buildRequest(endpoint: string, stream = false, model?: string): Promise<ReqMeta> {
   const auth    = resolveAuth();
+  const modelToUse = model || GEMINI_MODEL;
   const suffix  = stream ? ':streamGenerateContent?alt=sse' : ':generateContent';
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
 
   if (auth.mode === 'api_key') {
     const sep = stream ? '&' : '?';
-    const url = `${GEMINI_BASE}/models/${GEMINI_MODEL}${suffix}${stream ? '' : '?key=' + auth.apiKey}`;
+    const url = `${GEMINI_BASE}/models/${modelToUse}${suffix}${stream ? '' : '?key=' + auth.apiKey}`;
     return {
       url: stream
-        ? `${GEMINI_BASE}/models/${GEMINI_MODEL}:streamGenerateContent?key=${auth.apiKey}&alt=sse`
-        : `${GEMINI_BASE}/models/${GEMINI_MODEL}:generateContent?key=${auth.apiKey}`,
+        ? `${GEMINI_BASE}/models/${modelToUse}:streamGenerateContent?key=${auth.apiKey}&alt=sse`
+        : `${GEMINI_BASE}/models/${modelToUse}:generateContent?key=${auth.apiKey}`,
       headers,
     };
   }
@@ -301,8 +305,8 @@ async function buildRequest(endpoint: string, stream = false): Promise<ReqMeta> 
   headers['Authorization'] = `Bearer ${token}`;
   return {
     url: stream
-      ? `${GEMINI_BASE}/models/${GEMINI_MODEL}:streamGenerateContent?alt=sse`
-      : `${GEMINI_BASE}/models/${GEMINI_MODEL}:generateContent`,
+      ? `${GEMINI_BASE}/models/${modelToUse}:streamGenerateContent?alt=sse`
+      : `${GEMINI_BASE}/models/${modelToUse}:generateContent`,
     headers,
   };
 }
@@ -321,42 +325,98 @@ interface GenConfig {
 }
 
 async function callGemini(contents: GeminiContent[], config?: GenConfig): Promise<string> {
-  const { url, headers } = await buildRequest('', false);
+  let lastError: Error | null = null;
+  let modelToUse = GEMINI_MODEL;
+  
+  // Try primary model with retries, then fallback model
+  for (const model of [GEMINI_MODEL, GEMINI_FALLBACK]) {
+    modelToUse = model;
+    
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        const { url, headers } = await buildRequest('', false, modelToUse);
 
-  const body = {
-    contents,
-    generationConfig: {
-      temperature:      config?.temperature      ?? 0.4,
-      maxOutputTokens:  config?.maxOutputTokens  ?? 8192,
-      topP:             config?.topP             ?? 0.9,
-    },
-  };
+        const body = {
+          contents,
+          generationConfig: {
+            temperature:      config?.temperature      ?? 0.4,
+            maxOutputTokens:  config?.maxOutputTokens  ?? 8192,
+            topP:             config?.topP             ?? 0.9,
+          },
+        };
 
-  const resp = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
+        const resp = await fetch(url, { 
+          method: 'POST', 
+          headers, 
+          body: JSON.stringify(body),
+          signal: AbortSignal.timeout(30000) // 30s timeout
+        });
 
-  if (!resp.ok) {
-    const errText = await resp.text();
-    // Reset auth cache on auth errors so next call re-detects
-    if (resp.status === 401 || resp.status === 403) {
-      _auth = null;
-      _tokenCache = null;
-      
-      // Provide actionable error message
-      throw new Error(
-        `Gemini API authentication failed (${resp.status}): ${errText.substring(0, 200)}. ` +
-        `Check that your GEMINI_API_KEY is valid and not expired.`
-      );
+        if (!resp.ok) {
+          const errText = await resp.text();
+          
+          // Reset auth cache on auth errors
+          if (resp.status === 401 || resp.status === 403) {
+            _auth = null;
+            _tokenCache = null;
+            throw new Error(
+              `Gemini API authentication failed (${resp.status}): ${errText.substring(0, 200)}. ` +
+              `Check that your GEMINI_API_KEY is valid and not expired.`
+            );
+          }
+          
+          // Retry on 503 (service unavailable) or 429 (quota exceeded) with backoff
+          if (resp.status === 503 || resp.status === 429) {
+            lastError = new Error(`Gemini API ${resp.status === 503 ? 'service unavailable' : 'quota exceeded'} (${resp.status}): ${errText.substring(0, 200)}`);
+            
+            if (attempt < MAX_RETRIES) {
+              const delay = INITIAL_RETRY_DELAY * Math.pow(2, attempt) + Math.random() * 1000; // Exponential backoff with jitter
+              logger.warn(`Gemini API ${resp.status} for ${modelToUse}, retrying in ${Math.round(delay)}ms (attempt ${attempt + 1}/${MAX_RETRIES})`);
+              await new Promise(resolve => setTimeout(resolve, delay));
+              continue; // Retry same model
+            }
+            
+            // If this was the primary model, try fallback
+            if (model === GEMINI_MODEL && GEMINI_FALLBACK !== GEMINI_MODEL) {
+              logger.warn(`Primary model ${GEMINI_MODEL} failed after ${MAX_RETRIES} retries, trying fallback ${GEMINI_FALLBACK}`);
+              break; // Break inner loop to try fallback model
+            }
+            
+            throw lastError; // No more retries or fallbacks
+          }
+          
+          throw new Error(`Gemini API error ${resp.status}: ${errText.substring(0, 300)}`);
+        }
+
+        const data = await resp.json() as {
+          candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+        };
+
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+        if (!text) throw new Error('Gemini returned empty response');
+        
+        if (model !== GEMINI_MODEL) {
+          logger.info(`Used fallback model ${model} successfully`);
+        }
+        
+        return text;
+      } catch (err) {
+        if (err instanceof Error && err.name === 'AbortError') {
+          lastError = new Error(`Gemini API request timeout after 30s`);
+          if (attempt < MAX_RETRIES) {
+            const delay = INITIAL_RETRY_DELAY * Math.pow(2, attempt);
+            logger.warn(`Request timeout for ${modelToUse}, retrying in ${delay}ms`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            continue;
+          }
+        } else {
+          throw err; // Throw non-retryable errors immediately
+        }
+      }
     }
-    throw new Error(`Gemini API error ${resp.status}: ${errText.substring(0, 300)}`);
   }
-
-  const data = await resp.json() as {
-    candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-  };
-
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
-  if (!text) throw new Error('Gemini returned empty response');
-  return text;
+  
+  throw lastError || new Error('Failed to generate response after all retries');
 }
 
 // ─── Streaming call ───────────────────────────────────────────────────────────
