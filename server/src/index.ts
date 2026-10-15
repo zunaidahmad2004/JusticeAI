@@ -142,11 +142,14 @@ app.get('/api/health', (_req, res) => {
 
 // ─── Diagnostic endpoint for environment debugging ───────────────────────────
 app.get('/api/debug/env', (_req, res) => {
-  const apiKey = process.env.GEMINI_API_KEY || '';
+  const geminiKey = process.env.GEMINI_API_KEY || '';
+  const googleKey = process.env.GOOGLE_API_KEY || '';
   res.json({
     GEMINI_MODEL: process.env.GEMINI_MODEL || 'NOT_SET',
     GEMINI_API_KEY_EXISTS: !!process.env.GEMINI_API_KEY,
-    GEMINI_API_KEY_FORMAT: apiKey ? (apiKey.startsWith('AIza') ? 'VALID_AIza' : `INVALID_${apiKey.substring(0,4)}`) : 'NOT_SET',
+    GEMINI_API_KEY_FORMAT: geminiKey ? (geminiKey.startsWith('AIza') ? 'VALID_AIza' : `INVALID_${geminiKey.substring(0,4)}`) : 'NOT_SET',
+    GOOGLE_API_KEY_EXISTS: !!process.env.GOOGLE_API_KEY,
+    GOOGLE_API_KEY_FORMAT: googleKey ? (googleKey.startsWith('AIza') ? 'VALID_AIza' : `STARTS_WITH_${googleKey.substring(0,4)}`) : 'NOT_SET',
     GEMINI_CREDENTIALS_B64_EXISTS: !!process.env.GEMINI_CREDENTIALS_B64,
     NODE_ENV: process.env.NODE_ENV || 'NOT_SET',
     ai_status: getAIStatus(),
