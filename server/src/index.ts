@@ -198,10 +198,16 @@ if (fs.existsSync(frontendDist)) {
     logger.error(`Assets directory not found: ${assetsDir}`);
   }
 
-  // Serve hashed assets with long-lived cache; never cache index.html
+  // Explicitly serve assets directory with long-lived cache
+  app.use('/assets', express.static(path.join(frontendDist, 'assets'), {
+    maxAge: '1y',
+    fallthrough: false, // Return 404 if asset not found instead of calling next()
+  }));
+
+  // Serve other static files (index.html, favicon, etc.) with no cache for HTML
   app.use(express.static(frontendDist, {
     maxAge: '1y',
-    index:  false,
+    index: false,
     setHeaders: (res, filePath) => {
       if (filePath.endsWith('.html')) {
         res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
