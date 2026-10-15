@@ -330,3 +330,14 @@
 @keyframes gradientX  { 0%,100%{background-position:0% 50%} 50%{background-position:100% 50%} }
 @keyframes aurora     { 0%,100%{transform:translate(0%,0%) scale(1)} 33%{transform:translate(5%,-5%) scale(1.05)} 66%{transform:translate(-5%,5%) scale(0.97)} }
 @keyframes marquee    { 0%{transform:translateX(0%)} 100%{transform:translateX(-100%)} }
+
+/* ─── CRIME MAP (LEAFLET) ───────────────────────────────────────────────── */
+/* Dark map tiles for OpenStreetMap - removes default attribution watermark */
+.map-tiles-dark .leaflet-tile {
+  filter: brightness(0.6) invert(1) contrast(3) hue-rotate(200deg) saturate(0.3) brightness(0.7);
+}
+.leaflet-control-attribution {
+  font-size: 9px !important;
+  opacity: 0.4 !important;
+  background: rgba(0,0,0,0.3) !important;
+}
