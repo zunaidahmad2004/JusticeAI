@@ -140,6 +140,48 @@ app.get('/api/health', (_req, res) => {
   });
 });
 
+// ─── Diagnostic endpoint for deployment debugging ────────────────────────────
+app.get('/api/diagnostic', (_req, res) => {
+  const frontendPath = path.resolve(__dirname, './client');
+  const assetsPath = path.join(frontendPath, 'assets');
+  const indexHtmlPath = path.join(frontendPath, 'index.html');
+  const criticalAsset = path.join(assetsPath, 'index-BZXnqAXL.js');
+  
+  const diagnosticData: any = {
+    commit: 'dbe2b0a+diagnostic',
+    cwd: process.cwd(),
+    __dirname,
+    paths: {
+      frontend: frontendPath,
+      assets: assetsPath,
+      indexHtml: indexHtmlPath,
+      criticalAsset,
+    },
+    exists: {
+      frontend: fs.existsSync(frontendPath),
+      assets: fs.existsSync(assetsPath),
+      indexHtml: fs.existsSync(indexHtmlPath),
+      criticalAsset: fs.existsSync(criticalAsset),
+    },
+    env: {
+      NODE_ENV: process.env.NODE_ENV,
+      RENDER: process.env.RENDER,
+    }
+  };
+  
+  // List available index-*.js files
+  if (fs.existsSync(assetsPath)) {
+    const files = fs.readdirSync(assetsPath);
+    diagnosticData.availableIndexFiles = files.filter(f => f.startsWith('index-') && f.endsWith('.js'));
+    diagnosticData.totalAssets = {
+      js: files.filter(f => f.endsWith('.js')).length,
+      css: files.filter(f => f.endsWith('.css')).length,
+    };
+  }
+  
+  res.json(diagnosticData);
+});
+
 // ─── Diagnostic endpoint for deployment verification ─────────────────────────
 app.get('/api/diagnostic', (_req, res) => {
   const frontendPath = path.resolve(__dirname, './client');
@@ -210,20 +252,25 @@ const frontendDist = path.resolve(__dirname, './client');
 if (fs.existsSync(frontendDist)) {
   logger.info(`Serving frontend from: ${frontendDist}`);
   
-  // Log a few asset files to verify directory structure
+  // Comprehensive asset verification
   const assetsDir = path.join(frontendDist, 'assets');
   if (fs.existsSync(assetsDir)) {
-    const assetFiles = fs.readdirSync(assetsDir);
-    const jsFiles = assetFiles.filter(f => f.endsWith('.js'));
-    const cssFiles = assetFiles.filter(f => f.endsWith('.css'));
-    logger.info(`Assets: ${jsFiles.length} JS, ${cssFiles.length} CSS - samples: ${assetFiles.slice(0, 3).join(', ')}`);
+    const allFiles = fs.readdirSync(assetsDir);
+    const jsFiles = allFiles.filter(f => f.endsWith('.js'));
+    const cssFiles = allFiles.filter(f => f.endsWith('.css'));
+    logger.info(`Assets directory: ${jsFiles.length} JS files, ${cssFiles.length} CSS files`);
+    logger.info(`Sample assets: ${allFiles.slice(0, 3).join(', ')}`);
     
-    // CRITICAL: Verify the exact asset referenced in index.html
+    // Check critical asset that HTML references
     const criticalAsset = 'index-BZXnqAXL.js';
-    if (fs.existsSync(path.join(assetsDir, criticalAsset))) {
-      logger.info(`✓ ${criticalAsset} EXISTS at startup`);
+    const criticalPath = path.join(assetsDir, criticalAsset);
+    if (fs.existsSync(criticalPath)) {
+      const stat = fs.statSync(criticalPath);
+      logger.info(`✓ Critical asset EXISTS: ${criticalAsset} (${stat.size} bytes)`);
     } else {
-      logger.error(`✗ ${criticalAsset} MISSING - available index files: ${jsFiles.filter(f => f.startsWith('index-')).join(', ')}`);
+      const indexFiles = jsFiles.filter(f => f.startsWith('index-'));
+      logger.error(`✗ Critical asset MISSING: ${criticalAsset}`);
+      logger.error(`Available index-*.js files: ${indexFiles.join(', ')}`);
     }
   } else {
     logger.error(`Assets directory not found: ${assetsDir}`);
@@ -231,7 +278,7 @@ if (fs.existsSync(frontendDist)) {
 
   // Explicitly serve assets directory with long-lived cache
   const assetsPath = path.join(frontendDist, 'assets');
-  logger.info(`Assets path: ${assetsPath}`);
+  logger.info(`Mounting express.static('/assets') -> ${assetsPath}`);
   
   app.use('/assets', express.static(assetsPath, {
     maxAge: '1y',
