@@ -200,9 +200,10 @@ if (fs.existsSync(frontendDist)) {
 
   // DEBUG: Log asset requests to diagnose 404 issues
   app.use('/assets', (req, res, next) => {
-    const assetPath = path.join(frontendDist, 'assets', req.path.substring(1)); // Remove leading /
+    // req.path already has /assets stripped, so it's just /index-BZXnqAXL.js
+    const assetPath = path.join(frontendDist, 'assets', req.path);
     const exists = fs.existsSync(assetPath);
-    logger.info(`Asset request: ${req.path}, exists: ${exists}, fullPath: ${assetPath}`);
+    logger.info(`Asset request: /assets${req.path}, exists: ${exists}, fullPath: ${assetPath}`);
     next();
   });
 
