@@ -5117,7 +5117,7 @@ if (import_fs3.default.existsSync(frontendDist)) {
     }
   }));
   app.get("*", (req, res, next) => {
-    if (req.path.startsWith("/api/") || req.path.startsWith("/uploads/")) {
+    if (req.path.startsWith("/api/") || req.path.startsWith("/uploads/") || req.path.startsWith("/assets/") || /\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot|json|txt|xml)$/i.test(req.path)) {
       return next();
     }
     const indexFile = import_path4.default.join(frontendDist, "index.html");

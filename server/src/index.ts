@@ -200,9 +200,13 @@ if (fs.existsSync(frontendDist)) {
     },
   }));
 
-  // SPA fallback — serve index.html for every non-API, non-upload route
+  // SPA fallback — serve index.html for every non-API, non-upload, non-asset route
   app.get('*', (req, res, next) => {
-    if (req.path.startsWith('/api/') || req.path.startsWith('/uploads/')) {
+    // Skip API, uploads, and static assets (CSS, JS, images, fonts)
+    if (req.path.startsWith('/api/') || 
+        req.path.startsWith('/uploads/') ||
+        req.path.startsWith('/assets/') ||
+        /\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot|json|txt|xml)$/i.test(req.path)) {
       return next();
     }
     const indexFile = path.join(frontendDist, 'index.html');
