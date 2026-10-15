@@ -198,6 +198,14 @@ if (fs.existsSync(frontendDist)) {
     logger.error(`Assets directory not found: ${assetsDir}`);
   }
 
+  // DEBUG: Log asset requests to diagnose 404 issues
+  app.use('/assets', (req, res, next) => {
+    const assetPath = path.join(frontendDist, 'assets', req.path.substring(1)); // Remove leading /
+    const exists = fs.existsSync(assetPath);
+    logger.info(`Asset request: ${req.path}, exists: ${exists}, fullPath: ${assetPath}`);
+    next();
+  });
+
   // Serve hashed assets with long-lived cache; never cache index.html
   app.use(express.static(frontendDist, {
     maxAge: '1y',
