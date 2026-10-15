@@ -133,30 +133,35 @@ function resolveAuth(): Auth {
     token_uri: 'https://oauth2.googleapis.com/token',
   };
 
-  // 1. Plain API key — check GEMINI_API_KEY and GOOGLE_API_KEY (SDK expects either)
+  // 1. API key authentication — check GEMINI_API_KEY and GOOGLE_API_KEY
+  // Authorization keys (bound to service accounts) start with AQ. (new format)
+  // Standard API keys start with AIzaSy (legacy format)
+  // Both are valid and use API key authentication (not OAuth)
   const geminiKey = (process.env.GEMINI_API_KEY || '').trim();
   const googleKey = (process.env.GOOGLE_API_KEY || '').trim();
   
-  // Try GEMINI_API_KEY first
-  if (geminiKey && geminiKey.startsWith('AIza') && geminiKey.length >= 35) {
+  // Try GEMINI_API_KEY first - accept both AIza and AQ. prefixes
+  if (geminiKey && geminiKey.length >= 35) {
     _auth = { mode: 'api_key', apiKey: geminiKey };
-    logger.info(`Gemini: using GEMINI_API_KEY (${geminiKey.substring(0, 8)}...)`);
+    const keyType = geminiKey.startsWith('AIza') ? 'standard' : geminiKey.startsWith('AQ.') ? 'authorization' : 'unknown';
+    logger.info(`Gemini: using GEMINI_API_KEY (${keyType} key, ${geminiKey.substring(0, 6)}...)`);
     return _auth;
   }
   
-  // Try GOOGLE_API_KEY as fallback (some configs use this variable name)
-  if (googleKey && googleKey.startsWith('AIza') && googleKey.length >= 35) {
+  // Try GOOGLE_API_KEY as fallback
+  if (googleKey && googleKey.length >= 35) {
     _auth = { mode: 'api_key', apiKey: googleKey };
-    logger.info(`Gemini: using GOOGLE_API_KEY (${googleKey.substring(0, 8)}...)`);
+    const keyType = googleKey.startsWith('AIza') ? 'standard' : googleKey.startsWith('AQ.') ? 'authorization' : 'unknown';
+    logger.info(`Gemini: using GOOGLE_API_KEY (${keyType} key, ${googleKey.substring(0, 6)}...)`);
     return _auth;
   }
   
   // Log why keys were rejected
-  if (geminiKey && !geminiKey.startsWith('AIza')) {
-    logger.warn(`GEMINI_API_KEY rejected: must start with "AIza" (found: ${geminiKey.substring(0,6)}...)`);
+  if (geminiKey) {
+    logger.warn(`GEMINI_API_KEY rejected: too short (${geminiKey.length} chars, need >=35)`);
   }
-  if (googleKey && !googleKey.startsWith('AIza')) {
-    logger.warn(`GOOGLE_API_KEY rejected: must start with "AIza" (found: ${googleKey.substring(0,6)}...)`);
+  if (googleKey) {
+    logger.warn(`GOOGLE_API_KEY rejected: too short (${googleKey.length} chars, need >=35)`);
   }
 
   // 2. Base64 service account from env (set this in Render dashboard)
@@ -336,15 +341,11 @@ async function callGemini(contents: GeminiContent[], config?: GenConfig): Promis
       _auth = null;
       _tokenCache = null;
       
-      // Provide actionable error message for common auth issues
-      if (errText.includes('service accounts') || errText.includes('service account')) {
-        throw new Error(
-          `Gemini API authentication failed (403): Service account authentication is not supported. ` +
-          `Please set a valid GEMINI_API_KEY (must start with "AIzaSy") in Render environment variables. ` +
-          `Get one from https://aistudio.google.com/app/apikey`
-        );
-      }
-      throw new Error(`Gemini API authentication failed (${resp.status}): ${errText.substring(0, 200)}`);
+      // Provide actionable error message
+      throw new Error(
+        `Gemini API authentication failed (${resp.status}): ${errText.substring(0, 200)}. ` +
+        `Check that your GEMINI_API_KEY is valid and not expired.`
+      );
     }
     throw new Error(`Gemini API error ${resp.status}: ${errText.substring(0, 300)}`);
   }

@@ -160,14 +160,25 @@ function resolveAuth() {
     client_id: "108936804100194995499",
     token_uri: "https://oauth2.googleapis.com/token"
   };
-  const key = (process.env.GEMINI_API_KEY || "").trim();
-  if (key && key.startsWith("AIza") && key.length >= 35) {
-    _auth = { mode: "api_key", apiKey: key };
-    logger.info(`Gemini: api-key auth (${key.substring(0, 8)}...)`);
+  const geminiKey = (process.env.GEMINI_API_KEY || "").trim();
+  const googleKey = (process.env.GOOGLE_API_KEY || "").trim();
+  if (geminiKey && geminiKey.length >= 35) {
+    _auth = { mode: "api_key", apiKey: geminiKey };
+    const keyType = geminiKey.startsWith("AIza") ? "standard" : geminiKey.startsWith("AQ.") ? "authorization" : "unknown";
+    logger.info(`Gemini: using GEMINI_API_KEY (${keyType} key, ${geminiKey.substring(0, 6)}...)`);
     return _auth;
   }
-  if (key && key.length > 0) {
-    logger.warn(`Gemini: GEMINI_API_KEY looks invalid (format: ${key.substring(0, 8)}...) \u2014 skipping, trying service account next`);
+  if (googleKey && googleKey.length >= 35) {
+    _auth = { mode: "api_key", apiKey: googleKey };
+    const keyType = googleKey.startsWith("AIza") ? "standard" : googleKey.startsWith("AQ.") ? "authorization" : "unknown";
+    logger.info(`Gemini: using GOOGLE_API_KEY (${keyType} key, ${googleKey.substring(0, 6)}...)`);
+    return _auth;
+  }
+  if (geminiKey) {
+    logger.warn(`GEMINI_API_KEY rejected: too short (${geminiKey.length} chars, need >=35)`);
+  }
+  if (googleKey) {
+    logger.warn(`GOOGLE_API_KEY rejected: too short (${googleKey.length} chars, need >=35)`);
   }
   const b64 = (process.env.GEMINI_CREDENTIALS_B64 || "").trim();
   if (b64) {
@@ -291,6 +302,9 @@ async function callGemini(contents, config) {
     if (resp.status === 401 || resp.status === 403) {
       _auth = null;
       _tokenCache = null;
+      throw new Error(
+        `Gemini API authentication failed (${resp.status}): ${errText.substring(0, 200)}. Check that your GEMINI_API_KEY is valid and not expired.`
+      );
     }
     throw new Error(`Gemini API error ${resp.status}: ${errText.substring(0, 300)}`);
   }
@@ -5053,11 +5067,20 @@ app.get("/api/health", (_req, res) => {
   });
 });
 app.get("/api/debug/env", (_req, res) => {
-  const apiKey = process.env.GEMINI_API_KEY || "";
+  const geminiKey = process.env.GEMINI_API_KEY || "";
+  const googleKey = process.env.GOOGLE_API_KEY || "";
+  const getKeyType = (key) => {
+    if (!key) return "NOT_SET";
+    if (key.startsWith("AIza")) return "STANDARD_AIza";
+    if (key.startsWith("AQ.")) return "AUTHORIZATION_AQ";
+    return `UNKNOWN_${key.substring(0, 4)}`;
+  };
   res.json({
     GEMINI_MODEL: process.env.GEMINI_MODEL || "NOT_SET",
     GEMINI_API_KEY_EXISTS: !!process.env.GEMINI_API_KEY,
-    GEMINI_API_KEY_FORMAT: apiKey ? apiKey.startsWith("AIza") ? "VALID_AIza" : `INVALID_${apiKey.substring(0, 4)}` : "NOT_SET",
+    GEMINI_API_KEY_TYPE: getKeyType(geminiKey),
+    GOOGLE_API_KEY_EXISTS: !!process.env.GOOGLE_API_KEY,
+    GOOGLE_API_KEY_TYPE: getKeyType(googleKey),
     GEMINI_CREDENTIALS_B64_EXISTS: !!process.env.GEMINI_CREDENTIALS_B64,
     NODE_ENV: process.env.NODE_ENV || "NOT_SET",
     ai_status: getAIStatus()

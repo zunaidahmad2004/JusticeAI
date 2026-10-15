@@ -144,12 +144,20 @@ app.get('/api/health', (_req, res) => {
 app.get('/api/debug/env', (_req, res) => {
   const geminiKey = process.env.GEMINI_API_KEY || '';
   const googleKey = process.env.GOOGLE_API_KEY || '';
+  
+  const getKeyType = (key: string) => {
+    if (!key) return 'NOT_SET';
+    if (key.startsWith('AIza')) return 'STANDARD_AIza';
+    if (key.startsWith('AQ.')) return 'AUTHORIZATION_AQ';
+    return `UNKNOWN_${key.substring(0,4)}`;
+  };
+  
   res.json({
     GEMINI_MODEL: process.env.GEMINI_MODEL || 'NOT_SET',
     GEMINI_API_KEY_EXISTS: !!process.env.GEMINI_API_KEY,
-    GEMINI_API_KEY_FORMAT: geminiKey ? (geminiKey.startsWith('AIza') ? 'VALID_AIza' : `INVALID_${geminiKey.substring(0,4)}`) : 'NOT_SET',
+    GEMINI_API_KEY_TYPE: getKeyType(geminiKey),
     GOOGLE_API_KEY_EXISTS: !!process.env.GOOGLE_API_KEY,
-    GOOGLE_API_KEY_FORMAT: googleKey ? (googleKey.startsWith('AIza') ? 'VALID_AIza' : `STARTS_WITH_${googleKey.substring(0,4)}`) : 'NOT_SET',
+    GOOGLE_API_KEY_TYPE: getKeyType(googleKey),
     GEMINI_CREDENTIALS_B64_EXISTS: !!process.env.GEMINI_CREDENTIALS_B64,
     NODE_ENV: process.env.NODE_ENV || 'NOT_SET',
     ai_status: getAIStatus(),
