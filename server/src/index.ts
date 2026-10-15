@@ -140,6 +140,27 @@ app.get('/api/health', (_req, res) => {
   });
 });
 
+// ─── Diagnostic endpoint for deployment verification ─────────────────────────
+app.get('/api/diagnostic', (_req, res) => {
+  const frontendPath = path.resolve(__dirname, './client');
+  const assetsPath = path.join(frontendPath, 'assets');
+  
+  res.json({
+    commit: 'bdd4015+diagnostic',
+    nodeVersion: process.version,
+    cwd: process.cwd(),
+    __dirname,
+    paths: { frontend: frontendPath, assets: assetsPath },
+    exists: {
+      frontend: fs.existsSync(frontendPath),
+      assets: fs.existsSync(assetsPath),
+      index: fs.existsSync(path.join(frontendPath, 'index.html')),
+    },
+    sampleAssets: fs.existsSync(assetsPath) ? fs.readdirSync(assetsPath).filter(f => f.startsWith('index-')).slice(0, 5) : [],
+    env: { NODE_ENV: process.env.NODE_ENV, RENDER: process.env.RENDER }
+  });
+});
+
 // ─── Diagnostic endpoint for environment debugging ───────────────────────────
 app.get('/api/debug/env', (_req, res) => {
   const geminiKey = process.env.GEMINI_API_KEY || '';
