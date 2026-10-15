@@ -1,5 +1,5 @@
 /**
- * aiService.ts — JusticeAI Gemini 2.5 Flash integration
+ * aiService.ts — JusticeAI Gemini AI integration
  * NO mock mode. NO fallbacks. Real Gemini API only.
  *
  * Auth priority (auto-detected at startup):
@@ -103,7 +103,7 @@ export interface InvestigationRiskReport {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const GEMINI_MODEL    = 'gemini-2.5-flash';
+const GEMINI_MODEL    = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
 const GEMINI_BASE     = 'https://generativelanguage.googleapis.com/v1beta';
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────

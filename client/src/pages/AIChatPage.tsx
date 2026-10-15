@@ -74,9 +74,27 @@ function AIChatInner() {
   const [loading, setLoading] = useState(false);
   const [sessionId, setSessionId] = useState<string | undefined>();
   const [rows, setRows] = useState(1);
+  const [modelInfo, setModelInfo] = useState('Google Gemini');
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Fetch model info from backend health check
+  useEffect(() => {
+    api.get('/health')
+      .then(res => {
+        const aiStatus = res.data?.ai || '';
+        if (aiStatus && aiStatus !== 'not-configured') {
+          // Extract model name from status like "gemini-3.5-flash-lite (api-key)"
+          const match = aiStatus.match(/^([\w\-\.]+)/);
+          const modelName = match ? match[1] : 'Google Gemini';
+          setModelInfo(`Powered by ${modelName}`);
+        }
+      })
+      .catch(() => {
+        // Silently use default if health check fails
+      });
+  }, []);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -280,7 +298,7 @@ function AIChatInner() {
               style={{ maxHeight: '160px' }}
             />
             <div className="flex items-center justify-between px-3 pb-3 pt-1">
-              <span className="text-xs text-slate-700">Powered by Google Gemini 2.5 Flash</span>
+              <span className="text-xs text-slate-700">{modelInfo}</span>
               <motion.button whileTap={{ scale: 0.92 }} onClick={sendMessage}
                 disabled={loading || !input.trim()}
                 className={`w-9 h-9 rounded-2xl flex items-center justify-center transition-all duration-200 ${
